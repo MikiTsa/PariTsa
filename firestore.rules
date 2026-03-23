@@ -1,0 +1,101 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ========================================
+    // HELPER FUNCTIONS
+    // ========================================
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isValidUserData() {
+      let requiredFields = ['uid', 'email', 'createdAt'];
+      let allowedFields  = ['uid', 'email', 'displayName', 'createdAt'];
+
+      return request.resource.data.keys().hasAll(requiredFields)
+          && request.resource.data.keys().hasOnly(allowedFields)
+          && request.resource.data.uid        is string
+          && request.resource.data.email      is string
+          && request.resource.data.createdAt  is timestamp
+          && (
+               !request.resource.data.keys().hasAny(['displayName']) ||
+               request.resource.data.displayName is string
+             );
+    }
+
+    // Only call this on create/update — request.resource is null on read/delete.
+    function isValidTransaction() {
+      let requiredFields = ['id', 'title', 'amount', 'date'];
+      let allowedFields  = ['id', 'title', 'amount', 'date', 'category', 'note'];
+
+      return request.resource.data.keys().hasAll(requiredFields)
+          && request.resource.data.keys().hasOnly(allowedFields)
+          && request.resource.data.id     is string
+          && request.resource.data.title  is string
+          && request.resource.data.title.size() > 0
+          && request.resource.data.title.size() <= 100
+          && request.resource.data.amount is number
+          && request.resource.data.amount > 0
+          && request.resource.data.amount <= 999999999
+          && request.resource.data.date   is timestamp
+          && (
+               !request.resource.data.keys().hasAny(['category']) ||
+               request.resource.data.category is string
+             )
+          && (
+               !request.resource.data.keys().hasAny(['note']) ||
+               request.resource.data.note is string
+             );
+    }
+
+    function isValidUserUpdate() {
+      let affectedKeys = request.resource.data.diff(resource.data).affectedKeys();
+      return affectedKeys.hasOnly(['displayName'])
+          && request.resource.data.displayName is string;
+    }
+
+    // ========================================
+    // USERS COLLECTION
+    // ========================================
+
+    match /users/{userId} {
+      allow read:   if isOwner(userId);
+      allow create: if isOwner(userId) && isValidUserData();
+      allow update: if isOwner(userId) && isValidUserUpdate();
+      allow delete: if false;
+
+      // EXPENSES subcollection
+      match /expenses/{expenseId} {
+        allow read, delete: if isOwner(userId);
+        allow create, update: if isOwner(userId) && isValidTransaction();
+      }
+
+      // INCOMES subcollection
+      match /incomes/{incomeId} {
+        allow read, delete: if isOwner(userId);
+        allow create, update: if isOwner(userId) && isValidTransaction();
+      }
+
+      // SAVINGS subcollection
+      match /savings/{savingId} {
+        allow read, delete: if isOwner(userId);
+        allow create, update: if isOwner(userId) && isValidTransaction();
+      }
+    }
+
+    // ========================================
+    // DENY ALL OTHER ACCESS
+    // ========================================
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

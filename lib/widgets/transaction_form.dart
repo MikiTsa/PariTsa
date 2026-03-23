@@ -1,0 +1,329 @@
+import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
+import 'package:expenses_tracker/models/transaction.dart';
+import 'package:expenses_tracker/theme/app_colors.dart';
+
+class TransactionForm extends StatefulWidget {
+  final TransactionType transactionType;
+  final Function(Transaction) onSave;
+  final Transaction? initialTransaction;
+
+  const TransactionForm({
+    super.key,
+    required this.transactionType,
+    required this.onSave,
+    this.initialTransaction,
+  });
+
+  @override
+  State<TransactionForm> createState() => _TransactionFormState();
+}
+
+class _TransactionFormState extends State<TransactionForm> {
+  final _formKey = GlobalKey<FormState>();
+  final _titleController = TextEditingController();
+  final _amountController = TextEditingController();
+  final _noteController = TextEditingController();
+  String? _selectedCategory;
+  DateTime _selectedDate = DateTime.now();
+
+  bool get isEditing => widget.initialTransaction != null;
+
+  Color get _typeColor {
+    switch (widget.transactionType) {
+      case TransactionType.expense:
+        return AppColors.expense;
+      case TransactionType.income:
+        return AppColors.income;
+      case TransactionType.saving:
+        return AppColors.saving;
+    }
+  }
+
+  String get _typeTitle {
+    switch (widget.transactionType) {
+      case TransactionType.expense:
+        return 'Expense';
+      case TransactionType.income:
+        return 'Income';
+      case TransactionType.saving:
+        return 'Saving';
+    }
+  }
+
+  List<String> get _categoryOptions {
+    switch (widget.transactionType) {
+      case TransactionType.expense:
+        return [
+          'Food',
+          'Transport',
+          'Groceries',
+          'Fixed Expenses',
+          'Entertainment',
+          'Gifts',
+          'Shopping',
+          'Other',
+        ];
+      case TransactionType.income:
+        return ['Salary', 'Parents', 'Gift', 'Investment', 'Other'];
+      case TransactionType.saving:
+        return [
+          'Emergency Fund',
+          'Education',
+          'Vacation',
+          'Gifts',
+          'Home',
+          'Other',
+        ];
+    }
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.initialTransaction != null) {
+      _titleController.text = widget.initialTransaction!.title;
+      _amountController.text = widget.initialTransaction!.amount.toString();
+      _selectedDate = widget.initialTransaction!.date;
+      _selectedCategory = widget.initialTransaction!.category;
+      if (widget.initialTransaction!.note != null) {
+        _noteController.text = widget.initialTransaction!.note!;
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _titleController.dispose();
+    _amountController.dispose();
+    _noteController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _selectDate(BuildContext context) async {
+    final DateTime? picked = await showDatePicker(
+      context: context,
+      initialDate: _selectedDate,
+      firstDate: DateTime(2020),
+      lastDate: DateTime.now().add(const Duration(days: 365)),
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: Theme.of(context).colorScheme.copyWith(
+              primary: _typeColor,
+            ),
+          ),
+          child: child!,
+        );
+      },
+    );
+    if (picked != null && picked != _selectedDate) {
+      setState(() => _selectedDate = picked);
+    }
+  }
+
+  void _submitForm() {
+    if (_formKey.currentState!.validate()) {
+      final transactionData = Transaction(
+        id: isEditing ? widget.initialTransaction!.id : null,
+        title: _titleController.text.trim(),
+        amount: double.parse(_amountController.text),
+        date: _selectedDate,
+        category: _selectedCategory,
+        note:
+            _noteController.text.isNotEmpty
+                ? _noteController.text.trim()
+                : null,
+      );
+      widget.onSave(transactionData);
+      Navigator.pop(context);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: EdgeInsets.only(
+        bottom: MediaQuery.of(context).viewInsets.bottom,
+      ),
+      decoration: const BoxDecoration(
+        color: AppColors.cardBackground,
+        borderRadius: BorderRadius.only(
+          topLeft: Radius.circular(24),
+          topRight: Radius.circular(24),
+        ),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Form(
+          key: _formKey,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Handle bar
+                Center(
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: AppColors.pearlAqua,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+
+                Text(
+                  '${isEditing ? 'Edit' : 'Add'} $_typeTitle',
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: _typeColor,
+                  ),
+                ),
+                const SizedBox(height: 16),
+
+                // Title field
+                TextFormField(
+                  controller: _titleController,
+                  decoration: const InputDecoration(
+                    labelText: 'Title',
+                    hintText: 'Enter a title',
+                    prefixIcon: Icon(Icons.title, color: AppColors.darkCyan),
+                  ),
+                  validator: (value) {
+                    if (value == null || value.trim().isEmpty) {
+                      return 'Please enter a title';
+                    }
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 12),
+
+                // Amount field
+                TextFormField(
+                  controller: _amountController,
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
+                  decoration: const InputDecoration(
+                    labelText: 'Amount',
+                    hintText: 'Enter amount',
+                    prefixIcon: Icon(
+                      Icons.attach_money,
+                      color: AppColors.darkCyan,
+                    ),
+                  ),
+                  validator: (value) {
+                    if (value == null || value.isEmpty) {
+                      return 'Please enter an amount';
+                    }
+                    final parsed = double.tryParse(value);
+                    if (parsed == null) {
+                      return 'Please enter a valid number';
+                    }
+                    if (parsed <= 0) {
+                      return 'Amount must be greater than zero';
+                    }
+                    if (parsed > 999999999) {
+                      return 'Amount is too large';
+                    }
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 12),
+
+                // Date picker
+                InkWell(
+                  onTap: () => _selectDate(context),
+                  borderRadius: BorderRadius.circular(10),
+                  child: InputDecorator(
+                    decoration: const InputDecoration(
+                      labelText: 'Date',
+                      prefixIcon: Icon(
+                        Icons.calendar_today,
+                        color: AppColors.darkCyan,
+                      ),
+                    ),
+                    child: Text(
+                      DateFormat.yMMMd().format(_selectedDate),
+                      style: const TextStyle(color: AppColors.primaryText),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+
+                // Category dropdown
+                DropdownButtonFormField<String>(
+                  initialValue: _selectedCategory,
+                  decoration: const InputDecoration(
+                    labelText: 'Category',
+                    prefixIcon: Icon(
+                      Icons.category_outlined,
+                      color: AppColors.darkCyan,
+                    ),
+                  ),
+                  dropdownColor: AppColors.cardBackground,
+                  items:
+                      _categoryOptions.map((category) {
+                        return DropdownMenuItem(
+                          value: category,
+                          child: Text(
+                            category,
+                            style: const TextStyle(
+                              color: AppColors.primaryText,
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                  onChanged: (value) {
+                    setState(() => _selectedCategory = value);
+                  },
+                ),
+                const SizedBox(height: 12),
+
+                // Note field
+                TextFormField(
+                  controller: _noteController,
+                  decoration: const InputDecoration(
+                    labelText: 'Note (Optional)',
+                    hintText: 'Add a note',
+                    prefixIcon: Icon(
+                      Icons.note_outlined,
+                      color: AppColors.darkCyan,
+                    ),
+                  ),
+                  maxLines: 2,
+                ),
+                const SizedBox(height: 24),
+
+                // Submit button
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: _submitForm,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: _typeColor,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                    ),
+                    child: Text(
+                      '${isEditing ? 'Update' : 'Save'} $_typeTitle',
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
