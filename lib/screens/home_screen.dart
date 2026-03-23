@@ -6,6 +6,7 @@ import 'package:expenses_tracker/screens/expenses_screen.dart';
 import 'package:expenses_tracker/screens/incomes_screen.dart';
 import 'package:expenses_tracker/screens/savings_screen.dart';
 import 'package:expenses_tracker/widgets/balance_box.dart';
+import 'package:expenses_tracker/widgets/app_drawer.dart';
 import 'package:expenses_tracker/services/firebase_service.dart';
 import 'package:expenses_tracker/services/auth_service.dart';
 import 'package:expenses_tracker/theme/app_colors.dart';
@@ -19,6 +20,7 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen>
     with SingleTickerProviderStateMixin {
+  final _scaffoldKey = GlobalKey<ScaffoldState>();
   late TabController _tabController;
   final FirebaseService _firebaseService = FirebaseService();
   final AuthService _authService = AuthService();
@@ -170,6 +172,8 @@ class _HomeScreenState extends State<HomeScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      key: _scaffoldKey,
+      drawer: AppDrawer(onLogout: _handleLogout),
       body: SafeArea(
         child: Stack(
           children: [
@@ -196,7 +200,13 @@ class _HomeScreenState extends State<HomeScreen>
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          const SizedBox(width: 48),
+                          IconButton(
+                            onPressed: () =>
+                                _scaffoldKey.currentState?.openDrawer(),
+                            icon: const Icon(Icons.menu),
+                            tooltip: 'Menu',
+                            color: AppColors.primaryText,
+                          ),
                           const Text(
                             'PariTsa',
                             style: TextStyle(
