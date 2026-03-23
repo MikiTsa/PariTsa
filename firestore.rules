@@ -31,6 +31,11 @@ service cloud.firestore {
     }
 
     // Only call this on create/update — request.resource is null on read/delete.
+    function isValidCategoryData() {
+      return request.resource.data.keys().hasOnly(['items'])
+          && request.resource.data.items is list;
+    }
+
     function isValidTransaction() {
       let requiredFields = ['id', 'title', 'amount', 'date'];
       let allowedFields  = ['id', 'title', 'amount', 'date', 'category', 'note'];
@@ -87,6 +92,12 @@ service cloud.firestore {
       match /savings/{savingId} {
         allow read, delete: if isOwner(userId);
         allow create, update: if isOwner(userId) && isValidTransaction();
+      }
+
+      // CATEGORIES subcollection
+      match /categories/{categoryDocId} {
+        allow read: if isOwner(userId);
+        allow write: if isOwner(userId) && isValidCategoryData();
       }
     }
 

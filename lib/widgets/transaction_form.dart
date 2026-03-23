@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:expenses_tracker/models/transaction.dart';
+import 'package:expenses_tracker/services/firebase_service.dart';
 import 'package:expenses_tracker/theme/app_colors.dart';
 
 class TransactionForm extends StatefulWidget {
@@ -26,6 +27,7 @@ class _TransactionFormState extends State<TransactionForm> {
   final _noteController = TextEditingController();
   String? _selectedCategory;
   DateTime _selectedDate = DateTime.now();
+  List<String> _categories = [];
 
   bool get isEditing => widget.initialTransaction != null;
 
@@ -51,33 +53,6 @@ class _TransactionFormState extends State<TransactionForm> {
     }
   }
 
-  List<String> get _categoryOptions {
-    switch (widget.transactionType) {
-      case TransactionType.expense:
-        return [
-          'Food',
-          'Transport',
-          'Groceries',
-          'Fixed Expenses',
-          'Entertainment',
-          'Gifts',
-          'Shopping',
-          'Other',
-        ];
-      case TransactionType.income:
-        return ['Salary', 'Parents', 'Gift', 'Investment', 'Other'];
-      case TransactionType.saving:
-        return [
-          'Emergency Fund',
-          'Education',
-          'Vacation',
-          'Gifts',
-          'Home',
-          'Other',
-        ];
-    }
-  }
-
   @override
   void initState() {
     super.initState();
@@ -90,6 +65,19 @@ class _TransactionFormState extends State<TransactionForm> {
         _noteController.text = widget.initialTransaction!.note!;
       }
     }
+    _loadCategories();
+  }
+
+  Future<void> _loadCategories() async {
+    final cats = await FirebaseService().getCategories(widget.transactionType);
+    if (!mounted) return;
+    setState(() {
+      _categories = cats;
+      // Keep current selection even if it's no longer in the list
+      if (_selectedCategory != null && !cats.contains(_selectedCategory)) {
+        _categories = [_selectedCategory!, ...cats];
+      }
+    });
   }
 
   @override
@@ -267,7 +255,7 @@ class _TransactionFormState extends State<TransactionForm> {
                   ),
                   dropdownColor: AppColors.cardBackground,
                   items:
-                      _categoryOptions.map((category) {
+                      _categories.map((category) {
                         return DropdownMenuItem(
                           value: category,
                           child: Text(

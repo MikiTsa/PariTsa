@@ -5,10 +5,23 @@ import 'package:flutter/foundation.dart';
 
 // Firestore collection name constants — single source of truth used by
 // both FirebaseService and AuthService.
-const kUsersCollection    = 'users';
-const kExpensesCollection = 'expenses';
-const kIncomesCollection  = 'incomes';
-const kSavingsCollection  = 'savings';
+const kUsersCollection      = 'users';
+const kExpensesCollection   = 'expenses';
+const kIncomesCollection    = 'incomes';
+const kSavingsCollection    = 'savings';
+const kCategoriesCollection = 'categories';
+
+// Default categories per transaction type
+const _kDefaultExpenseCategories = [
+  'Food', 'Transport', 'Groceries', 'Fixed Expenses',
+  'Entertainment', 'Gifts', 'Shopping', 'Other',
+];
+const _kDefaultIncomeCategories = [
+  'Salary', 'Parents', 'Gift', 'Investment', 'Other',
+];
+const _kDefaultSavingCategories = [
+  'Emergency Fund', 'Education', 'Vacation', 'Gifts', 'Home', 'Other',
+];
 
 class FirebaseService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -133,6 +146,84 @@ class FirebaseService {
           .map((doc) => Transaction.fromFirestore(doc))
           .toList();
     });
+  }
+
+  // ── Categories ────────────────────────────────────────────────────────────
+
+  DocumentReference? _categoriesDoc(TransactionType type) {
+    if (_currentUserId == null) return null;
+    final docId = switch (type) {
+      TransactionType.expense => 'expenses',
+      TransactionType.income  => 'incomes',
+      TransactionType.saving  => 'savings',
+    };
+    return _firestore
+        .collection(kUsersCollection)
+        .doc(_currentUserId)
+        .collection(kCategoriesCollection)
+        .doc(docId);
+  }
+
+  List<String> _defaultCategories(TransactionType type) => switch (type) {
+    TransactionType.expense => List.from(_kDefaultExpenseCategories),
+    TransactionType.income  => List.from(_kDefaultIncomeCategories),
+    TransactionType.saving  => List.from(_kDefaultSavingCategories),
+  };
+
+  List<String> _parseCategories(DocumentSnapshot snapshot, TransactionType type) {
+    if (!snapshot.exists) return _defaultCategories(type);
+    final data = snapshot.data() as Map<String, dynamic>?;
+    final items = data?['items'] as List<dynamic>?;
+    if (items == null || items.isEmpty) return _defaultCategories(type);
+    return items.cast<String>();
+  }
+
+  Stream<List<String>> getCategoriesStream(TransactionType type) {
+    final doc = _categoriesDoc(type);
+    if (doc == null) return Stream.value(_defaultCategories(type));
+    return doc.snapshots().map((s) => _parseCategories(s, type));
+  }
+
+  Future<List<String>> getCategories(TransactionType type) async {
+    final doc = _categoriesDoc(type);
+    if (doc == null) return _defaultCategories(type);
+    return _parseCategories(await doc.get(), type);
+  }
+
+  Future<void> addCategory(String name, TransactionType type) async {
+    if (_currentUserId == null) return;
+    final current = await getCategories(type);
+    if (current.contains(name)) return;
+    await _categoriesDoc(type)!.set({'items': [...current, name]});
+  }
+
+  Future<void> deleteCategory(String name, TransactionType type) async {
+    if (_currentUserId == null) return;
+    final current = await getCategories(type);
+    await _categoriesDoc(type)!.set({
+      'items': current.where((c) => c != name).toList(),
+    });
+  }
+
+  Future<void> insertCategoryAt(
+    String name,
+    TransactionType type,
+    int index,
+  ) async {
+    if (_currentUserId == null) return;
+    final current = await getCategories(type);
+    if (current.contains(name)) return;
+    final updated = List<String>.from(current)
+      ..insert(index.clamp(0, current.length), name);
+    await _categoriesDoc(type)!.set({'items': updated});
+  }
+
+  Future<void> reorderCategories(
+    List<String> reorderedList,
+    TransactionType type,
+  ) async {
+    if (_currentUserId == null) return;
+    await _categoriesDoc(type)!.set({'items': reorderedList});
   }
 
   // Get all transactions of a specific type (one-time fetch)
