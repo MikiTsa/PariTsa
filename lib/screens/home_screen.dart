@@ -174,6 +174,7 @@ class _HomeScreenState extends State<HomeScreen>
     return Scaffold(
       key: _scaffoldKey,
       drawer: const AppDrawer(),
+      drawerEnableOpenDragGesture: false,
       body: SafeArea(
         child: Stack(
           children: [
@@ -368,3 +369,4 @@ class _HomeScreenState extends State<HomeScreen>
     );
   }
 }
+
