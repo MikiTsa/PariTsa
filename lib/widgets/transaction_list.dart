@@ -90,12 +90,36 @@ class TransactionList extends StatelessWidget {
                     color: AppColors.primaryText,
                   ),
                 ),
-                subtitle: Text(
-                  transaction.category ?? 'No category',
-                  style: const TextStyle(
-                    color: AppColors.secondaryText,
-                    fontSize: 12,
-                  ),
+                subtitle: Wrap(
+                  spacing: 6,
+                  children: [
+                    Text(
+                      transaction.category ?? 'No category',
+                      style: const TextStyle(
+                        color: AppColors.secondaryText,
+                        fontSize: 12,
+                      ),
+                    ),
+                    if (transaction.tag != null)
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 6,
+                          vertical: 1,
+                        ),
+                        decoration: BoxDecoration(
+                          color: typeColor.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          transaction.tag!,
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: typeColor,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                  ],
                 ),
                 trailing: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
@@ -134,7 +158,9 @@ class TransactionList extends StatelessWidget {
     if (DateUtils.isSameDay(
       date,
       DateTime(now.year, now.month, now.day - 1),
-    )) return 'Yesterday';
+    )) {
+      return 'Yesterday';
+    }
     if (date.isAfter(DateTime(now.year, now.month, now.day - 7))) {
       return DateFormat.EEEE().format(date);
     } else {
@@ -261,6 +287,15 @@ class TransactionList extends StatelessWidget {
                           'Note',
                           transaction.note!,
                         ),
+                      if (transaction.tag != null) ...[
+                        if (transaction.category != null || transaction.note != null)
+                          const SizedBox(height: 12),
+                        _buildDetailRow(
+                          Icons.label_outline,
+                          'Tag',
+                          transaction.tag!,
+                        ),
+                      ],
                     ],
                   ),
                 ),

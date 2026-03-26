@@ -25,6 +25,7 @@ class _TransactionFormState extends State<TransactionForm> {
   final _titleController = TextEditingController();
   final _amountController = TextEditingController();
   final _noteController = TextEditingController();
+  final _tagController = TextEditingController();
   String? _selectedCategory;
   DateTime _selectedDate = DateTime.now();
   List<String> _categories = [];
@@ -64,6 +65,9 @@ class _TransactionFormState extends State<TransactionForm> {
       if (widget.initialTransaction!.note != null) {
         _noteController.text = widget.initialTransaction!.note!;
       }
+      if (widget.initialTransaction!.tag != null) {
+        _tagController.text = widget.initialTransaction!.tag!;
+      }
     }
     _loadCategories();
   }
@@ -85,6 +89,7 @@ class _TransactionFormState extends State<TransactionForm> {
     _titleController.dispose();
     _amountController.dispose();
     _noteController.dispose();
+    _tagController.dispose();
     super.dispose();
   }
 
@@ -110,6 +115,41 @@ class _TransactionFormState extends State<TransactionForm> {
     }
   }
 
+  void _showTagDialog() {
+    final tempController = TextEditingController(text: _tagController.text);
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Tag (Optional)'),
+        content: TextField(
+          controller: tempController,
+          autofocus: true,
+          decoration: const InputDecoration(
+            hintText: 'e.g. Vacation 2025, Side project',
+            prefixIcon: Icon(Icons.label_outline, color: AppColors.darkCyan),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              setState(() => _tagController.text = '');
+              Navigator.pop(context);
+            },
+            child: const Text('Clear'),
+          ),
+          TextButton(
+            onPressed: () {
+              setState(() => _tagController.text = tempController.text.trim());
+              Navigator.pop(context);
+            },
+            style: TextButton.styleFrom(foregroundColor: _typeColor),
+            child: const Text('Done'),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _submitForm() {
     if (_formKey.currentState!.validate()) {
       final transactionData = Transaction(
@@ -121,6 +161,10 @@ class _TransactionFormState extends State<TransactionForm> {
         note:
             _noteController.text.isNotEmpty
                 ? _noteController.text.trim()
+                : null,
+        tag:
+            _tagController.text.isNotEmpty
+                ? _tagController.text.trim()
                 : null,
       );
       widget.onSave(transactionData);
@@ -163,13 +207,48 @@ class _TransactionFormState extends State<TransactionForm> {
                 ),
                 const SizedBox(height: 16),
 
-                Text(
-                  '${isEditing ? 'Edit' : 'Add'} $_typeTitle',
-                  style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                    color: _typeColor,
-                  ),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        '${isEditing ? 'Edit' : 'Add'} $_typeTitle',
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                          color: _typeColor,
+                        ),
+                      ),
+                    ),
+                    GestureDetector(
+                      onTap: _showTagDialog,
+                      child: Stack(
+                        clipBehavior: Clip.none,
+                        children: [
+                          Icon(
+                            Icons.label_outline,
+                            color:
+                                _tagController.text.isNotEmpty
+                                    ? _typeColor
+                                    : AppColors.mutedText,
+                            size: 26,
+                          ),
+                          if (_tagController.text.isNotEmpty)
+                            Positioned(
+                              top: -2,
+                              right: -2,
+                              child: Container(
+                                width: 8,
+                                height: 8,
+                                decoration: BoxDecoration(
+                                  color: _typeColor,
+                                  shape: BoxShape.circle,
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 16),
 

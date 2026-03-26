@@ -12,6 +12,7 @@ class Transaction {
   final DateTime date;
   final String? category;
   final String? note;
+  final String? tag;
 
   Transaction({
     String? id,
@@ -20,6 +21,7 @@ class Transaction {
     required this.date,
     this.category,
     this.note,
+    this.tag,
   }) : id = id ?? const Uuid().v4();
 
   // Create a copy of the transaction with some modified fields
@@ -29,6 +31,7 @@ class Transaction {
     DateTime? date,
     String? category,
     String? note,
+    String? tag,
   }) {
     return Transaction(
       id: id,
@@ -37,6 +40,7 @@ class Transaction {
       date: date ?? this.date,
       category: category ?? this.category,
       note: note ?? this.note,
+      tag: tag ?? this.tag,
     );
   }
 
@@ -52,6 +56,7 @@ class Transaction {
     };
     if (category != null) map['category'] = category;
     if (note != null) map['note'] = note;
+    if (tag != null) map['tag'] = tag;
     return map;
   }
 
@@ -66,6 +71,7 @@ class Transaction {
           : DateTime.now(),
       category: map['category'] as String?,
       note: map['note'] as String?,
+      tag: map['tag'] as String?,
     );
   }
 

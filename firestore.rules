@@ -38,7 +38,7 @@ service cloud.firestore {
 
     function isValidTransaction() {
       let requiredFields = ['id', 'title', 'amount', 'date'];
-      let allowedFields  = ['id', 'title', 'amount', 'date', 'category', 'note'];
+      let allowedFields  = ['id', 'title', 'amount', 'date', 'category', 'note', 'tag'];
 
       return request.resource.data.keys().hasAll(requiredFields)
           && request.resource.data.keys().hasOnly(allowedFields)
@@ -57,6 +57,10 @@ service cloud.firestore {
           && (
                !request.resource.data.keys().hasAny(['note']) ||
                request.resource.data.note is string
+             )
+          && (
+               !request.resource.data.keys().hasAny(['tag']) ||
+               request.resource.data.tag is string
              );
     }
 

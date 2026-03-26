@@ -10,7 +10,8 @@ A personal finance tracking app built with Flutter and Firebase. Log your expens
 - **Income tracking** — record your salary, gifts, investments, and other income sources
 - **Savings tracking** — keep tabs on what you're setting aside (Emergency Fund, Vacation, Education, etc.)
 - **Live balance** — your current balance (incomes minus expenses minus savings) updates instantly
-- **Transaction details** — each entry supports a title, amount, date, category, and optional note
+- **Transaction details** — each entry supports a title, amount, date, category, optional note, and optional tag
+- **Tags** — attach a free-form label to any transaction (e.g. "Vacation 2025", "Side project") for cross-category grouping
 - **Edit & delete** — tap any transaction to view details, edit it, or remove it
 - **Google Sign-In** — sign in with your Google account or register with email and password
 - **Secure data** — every user's data is private and protected by Firestore security rules
