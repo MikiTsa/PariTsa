@@ -45,9 +45,10 @@ class ExpensesScreen extends StatelessWidget {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(
-            Icons.receipt_long_outlined,
-            size: 80,
+          Image.asset(
+            'assets/expense_icon.png',
+            width: 80,
+            height: 80,
             color: AppColors.expense.withValues(alpha: 0.35),
           ),
           const SizedBox(height: 16),

@@ -74,14 +74,14 @@ class _HistoryScreenState extends State<HistoryScreen> {
     }
   }
 
-  IconData _iconFor(TransactionType type) {
+  String _iconPathFor(TransactionType type) {
     switch (type) {
       case TransactionType.expense:
-        return Icons.shopping_cart;
+        return 'assets/expense_icon.png';
       case TransactionType.income:
-        return Icons.account_balance_wallet;
+        return 'assets/income_icon.png';
       case TransactionType.saving:
-        return Icons.savings;
+        return 'assets/saving_icon.png';
     }
   }
 
@@ -111,7 +111,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
   void _showDetails(BuildContext context, _HistoryEntry entry) {
     final t = entry.transaction;
     final color = _colorFor(entry.type);
-    final icon = _iconFor(entry.type);
+    final iconPath = _iconPathFor(entry.type);
 
     showModalBottomSheet(
       context: context,
@@ -147,7 +147,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                     CircleAvatar(
                       backgroundColor: color.withValues(alpha: 0.15),
                       radius: 24,
-                      child: Icon(icon, color: color, size: 28),
+                      child: Image.asset(iconPath, width: 28, height: 28, color: color),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
@@ -285,7 +285,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                   final entry = entries[index];
                   final t = entry.transaction;
                   final color = _colorFor(entry.type);
-                  final icon = _iconFor(entry.type);
+                  final iconPath = _iconPathFor(entry.type);
 
                   final isFirstOfDay =
                       index == 0 ||
@@ -317,7 +317,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                         child: ListTile(
                           leading: CircleAvatar(
                             backgroundColor: color.withValues(alpha: 0.15),
-                            child: Icon(icon, color: color, size: 22),
+                            child: Image.asset(iconPath, width: 22, height: 22, color: color),
                           ),
                           title: Text(
                             t.title,

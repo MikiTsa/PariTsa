@@ -45,9 +45,10 @@ class IncomesScreen extends StatelessWidget {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(
-            Icons.account_balance_wallet_outlined,
-            size: 80,
+          Image.asset(
+            'assets/income_icon.png',
+            width: 80,
+            height: 80,
             color: AppColors.income.withValues(alpha: 0.35),
           ),
           const SizedBox(height: 16),

@@ -28,14 +28,14 @@ class TransactionList extends StatelessWidget {
     }
   }
 
-  IconData get typeIcon {
+  String get typeIconPath {
     switch (transactionType) {
       case TransactionType.expense:
-        return Icons.shopping_cart;
+        return 'assets/expense_icon.png';
       case TransactionType.income:
-        return Icons.account_balance_wallet;
+        return 'assets/income_icon.png';
       case TransactionType.saving:
-        return Icons.savings;
+        return 'assets/saving_icon.png';
     }
   }
 
@@ -81,7 +81,12 @@ class TransactionList extends StatelessWidget {
               child: ListTile(
                 leading: CircleAvatar(
                   backgroundColor: typeColor.withValues(alpha: 0.15),
-                  child: Icon(typeIcon, color: typeColor, size: 22),
+                  child: Image.asset(
+                    typeIconPath,
+                    width: 22,
+                    height: 22,
+                    color: typeColor,
+                  ),
                 ),
                 title: Text(
                   transaction.title,
@@ -228,7 +233,12 @@ class TransactionList extends StatelessWidget {
                 CircleAvatar(
                   backgroundColor: typeColor.withValues(alpha: 0.15),
                   radius: 24,
-                  child: Icon(typeIcon, color: typeColor, size: 28),
+                  child: Image.asset(
+                    typeIconPath,
+                    width: 28,
+                    height: 28,
+                    color: typeColor,
+                  ),
                 ),
                 const SizedBox(width: 12),
                 Expanded(

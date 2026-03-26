@@ -34,3 +34,6 @@ flutter:
   assets:
     - assets/google_logo.png
     - assets/temp_icon.png
+    - assets/expense_icon.png
+    - assets/income_icon.png
+    - assets/saving_icon.png

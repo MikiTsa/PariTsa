@@ -173,7 +173,7 @@ class _HomeScreenState extends State<HomeScreen>
   Widget build(BuildContext context) {
     return Scaffold(
       key: _scaffoldKey,
-      drawer: AppDrawer(onLogout: _handleLogout),
+      drawer: const AppDrawer(),
       body: SafeArea(
         child: Stack(
           children: [
@@ -225,42 +225,69 @@ class _HomeScreenState extends State<HomeScreen>
                         ],
                       ),
                       const SizedBox(height: 8),
-                      TabBar(
-                        controller: _tabController,
-                        indicatorWeight: 3,
-                        indicatorColor: AppColors.pearlAqua,
-                        dividerColor: Colors.transparent,
-                        labelColor: AppColors.appBarText,
-                        unselectedLabelColor: AppColors.mutedText,
-                        tabs: const [
-                          Tab(
-                            child: Text(
-                              'Expenses',
-                              style: TextStyle(
-                                color: AppColors.expense,
-                                fontWeight: FontWeight.bold,
+                      LayoutBuilder(
+                        builder: (context, constraints) {
+                          final third = constraints.maxWidth / 3;
+                          return Stack(
+                            children: [
+                              TabBar(
+                                controller: _tabController,
+                                indicatorWeight: 3,
+                                indicatorColor: AppColors.pearlAqua,
+                                dividerColor: Colors.transparent,
+                                labelColor: AppColors.appBarText,
+                                unselectedLabelColor: AppColors.mutedText,
+                                tabs: const [
+                                  Tab(
+                                    child: Text(
+                                      'Expenses',
+                                      style: TextStyle(
+                                        color: AppColors.expense,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ),
+                                  Tab(
+                                    child: Text(
+                                      'Incomes',
+                                      style: TextStyle(
+                                        color: AppColors.income,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ),
+                                  Tab(
+                                    child: Text(
+                                      'Savings',
+                                      style: TextStyle(
+                                        color: AppColors.saving,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ),
+                                ],
                               ),
-                            ),
-                          ),
-                          Tab(
-                            child: Text(
-                              'Incomes',
-                              style: TextStyle(
-                                color: AppColors.income,
-                                fontWeight: FontWeight.bold,
+                              Positioned(
+                                left: third,
+                                top: 12,
+                                bottom: 14,
+                                child: Container(
+                                  width: 1,
+                                  color: AppColors.pearlAqua.withValues(alpha: 0.35),
+                                ),
                               ),
-                            ),
-                          ),
-                          Tab(
-                            child: Text(
-                              'Savings',
-                              style: TextStyle(
-                                color: AppColors.saving,
-                                fontWeight: FontWeight.bold,
+                              Positioned(
+                                left: third * 2,
+                                top: 12,
+                                bottom: 14,
+                                child: Container(
+                                  width: 1,
+                                  color: AppColors.pearlAqua.withValues(alpha: 0.35),
+                                ),
                               ),
-                            ),
-                          ),
-                        ],
+                            ],
+                          );
+                        },
                       ),
                     ],
                   ),

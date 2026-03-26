@@ -7,9 +7,7 @@ import 'package:expenses_tracker/screens/sidebar/settings_screen.dart';
 import 'package:expenses_tracker/theme/app_colors.dart';
 
 class AppDrawer extends StatelessWidget {
-  final VoidCallback onLogout;
-
-  const AppDrawer({super.key, required this.onLogout});
+  const AppDrawer({super.key});
 
   void _navigate(BuildContext context, Widget screen) {
     Navigator.pop(context); // close drawer
@@ -67,9 +65,9 @@ class AppDrawer extends StatelessWidget {
 
             // Nav items
             _DrawerItem(
-              icon: Icons.category_outlined,
-              label: 'Categories',
-              onTap: () => _navigate(context, const CategoriesScreen()),
+              icon: Icons.person_outline,
+              label: 'Profile',
+              onTap: () => _navigate(context, const ProfileScreen()),
             ),
             _DrawerItem(
               icon: Icons.history,
@@ -82,26 +80,19 @@ class AppDrawer extends StatelessWidget {
               onTap: () => _navigate(context, const AnalyticsScreen()),
             ),
             _DrawerItem(
-              icon: Icons.person_outline,
-              label: 'Profile',
-              onTap: () => _navigate(context, const ProfileScreen()),
-            ),
-            _DrawerItem(
-              icon: Icons.settings_outlined,
-              label: 'Settings',
-              onTap: () => _navigate(context, const SettingsScreen()),
+              icon: Icons.category_outlined,
+              label: 'Categories',
+              onTap: () => _navigate(context, const CategoriesScreen()),
             ),
 
             const Spacer(),
             const Divider(color: AppColors.divider, height: 1),
             const SizedBox(height: 4),
 
-            // Logout
             _DrawerItem(
-              icon: Icons.logout,
-              label: 'Logout',
-              color: AppColors.expense,
-              onTap: onLogout,
+              icon: Icons.settings_outlined,
+              label: 'Settings',
+              onTap: () => _navigate(context, const SettingsScreen()),
             ),
             const SizedBox(height: 8),
           ],
@@ -115,23 +106,21 @@ class _DrawerItem extends StatelessWidget {
   final IconData icon;
   final String label;
   final VoidCallback onTap;
-  final Color color;
 
   const _DrawerItem({
     required this.icon,
     required this.label,
     required this.onTap,
-    this.color = AppColors.primaryText,
   });
 
   @override
   Widget build(BuildContext context) {
     return ListTile(
-      leading: Icon(icon, color: color, size: 22),
+      leading: Icon(icon, color: AppColors.primaryText, size: 22),
       title: Text(
         label,
-        style: TextStyle(
-          color: color,
+        style: const TextStyle(
+          color: AppColors.primaryText,
           fontSize: 15,
           fontWeight: FontWeight.w500,
         ),

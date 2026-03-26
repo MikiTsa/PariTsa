@@ -45,9 +45,10 @@ class SavingsScreen extends StatelessWidget {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(
-            Icons.savings_outlined,
-            size: 80,
+          Image.asset(
+            'assets/saving_icon.png',
+            width: 80,
+            height: 80,
             color: AppColors.saving.withValues(alpha: 0.5),
           ),
           const SizedBox(height: 16),
