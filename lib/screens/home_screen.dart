@@ -10,6 +10,7 @@ import 'package:expenses_tracker/widgets/balance_box.dart';
 import 'package:expenses_tracker/widgets/app_drawer.dart';
 import 'package:expenses_tracker/services/firebase_service.dart';
 import 'package:expenses_tracker/services/auth_service.dart';
+import 'package:expenses_tracker/services/local_notification_service.dart';
 import 'package:expenses_tracker/theme/app_colors.dart';
 import 'package:expenses_tracker/theme/theme_extensions.dart';
 
@@ -231,11 +232,44 @@ class _HomeScreenState extends State<HomeScreen>
                               letterSpacing: 0.5,
                             ),
                           ),
-                          IconButton(
-                            onPressed: _handleLogout,
-                            icon: const Icon(Icons.logout),
-                            tooltip: 'Logout',
-                            color: AppColors.expense,
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              // Wallet test trigger — visible only in debug builds.
+                              if (const bool.fromEnvironment('dart.vm.product') == false)
+                                IconButton(
+                                  onPressed: () async {
+                                    const title    = 'Lidl Slovenija d o o';
+                                    const amount   = 52.43;
+                                    const category = 'Groceries';
+                                    await addTransaction(
+                                      Transaction(
+                                        title: title,
+                                        amount: amount,
+                                        date: DateTime.now(),
+                                        category: category,
+                                        note: 'Auto-captured from Google Wallet',
+                                      ),
+                                      TransactionType.expense,
+                                    );
+                                    await LocalNotificationService.instance
+                                        .showExpenseAdded(
+                                      title: title,
+                                      amount: amount,
+                                      category: category,
+                                    );
+                                  },
+                                  icon: const Icon(Icons.wallet),
+                                  tooltip: 'Test wallet notification',
+                                  color: AppColors.income,
+                                ),
+                              IconButton(
+                                onPressed: _handleLogout,
+                                icon: const Icon(Icons.logout),
+                                tooltip: 'Logout',
+                                color: AppColors.expense,
+                              ),
+                            ],
                           ),
                         ],
                       ),

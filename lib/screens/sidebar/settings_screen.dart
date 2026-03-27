@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:expenses_tracker/providers/app_settings.dart';
+import 'package:expenses_tracker/services/wallet_notification_service.dart';
 import 'package:expenses_tracker/theme/app_colors.dart';
 import 'package:expenses_tracker/theme/theme_extensions.dart';
 
@@ -141,6 +142,17 @@ class SettingsScreen extends StatelessWidget {
               current: settings.defaultTab,
               onChanged: settings.setDefaultTab,
             ),
+          ),
+
+          const SizedBox(height: 8),
+
+          // ── Integrations ──────────────────────────────────────────────────
+          _SectionHeader('Integrations'),
+
+          _SettingsTile(
+            icon: Icons.wallet,
+            title: 'Google Wallet',
+            child: const _WalletPermissionTile(),
           ),
 
           const SizedBox(height: 24),
@@ -477,6 +489,105 @@ class _CurrencyPicker extends StatelessWidget {
           const SizedBox(height: 8),
         ],
       ),
+    );
+  }
+}
+
+// ─── Google Wallet permission tile ─────────────────────────────────────────────
+
+class _WalletPermissionTile extends StatefulWidget {
+  const _WalletPermissionTile();
+
+  @override
+  State<_WalletPermissionTile> createState() => _WalletPermissionTileState();
+}
+
+class _WalletPermissionTileState extends State<_WalletPermissionTile>
+    with WidgetsBindingObserver {
+  final _service = WalletNotificationService();
+  bool _granted = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _checkPermission();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Re-check after user returns from system settings.
+    if (state == AppLifecycleState.resumed) _checkPermission();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  Future<void> _checkPermission() async {
+    final granted = await _service.isPermissionGranted();
+    if (mounted) setState(() => _granted = granted);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Auto-capture Google Wallet payment notifications as expenses.',
+          style: TextStyle(fontSize: 12, color: context.cMutedText),
+        ),
+        const SizedBox(height: 10),
+        Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              decoration: BoxDecoration(
+                color: _granted
+                    ? Colors.green.withValues(alpha: 0.12)
+                    : AppColors.expense.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    _granted ? Icons.check_circle_outline : Icons.block_outlined,
+                    size: 13,
+                    color: _granted ? Colors.green : AppColors.expense,
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    _granted ? 'Access granted' : 'Access not granted',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: _granted ? Colors.green : AppColors.expense,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 10),
+            if (!_granted)
+              TextButton.icon(
+                onPressed: _service.openPermissionSettings,
+                style: TextButton.styleFrom(
+                  foregroundColor: AppColors.primary,
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  textStyle: const TextStyle(fontSize: 12),
+                ),
+                icon: const Icon(Icons.settings_outlined, size: 14),
+                label: const Text('Grant access'),
+              ),
+          ],
+        ),
+      ],
     );
   }
 }
