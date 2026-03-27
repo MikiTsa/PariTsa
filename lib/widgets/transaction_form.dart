@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 import 'package:expenses_tracker/models/transaction.dart';
 import 'package:expenses_tracker/services/firebase_service.dart';
 import 'package:expenses_tracker/theme/app_colors.dart';
+import 'package:expenses_tracker/theme/theme_extensions.dart';
 
 class TransactionForm extends StatefulWidget {
   final TransactionType transactionType;
@@ -178,9 +179,9 @@ class _TransactionFormState extends State<TransactionForm> {
       padding: EdgeInsets.only(
         bottom: MediaQuery.of(context).viewInsets.bottom,
       ),
-      decoration: const BoxDecoration(
-        color: AppColors.cardBackground,
-        borderRadius: BorderRadius.only(
+      decoration: BoxDecoration(
+        color: context.cCard,
+        borderRadius: const BorderRadius.only(
           topLeft: Radius.circular(24),
           topRight: Radius.circular(24),
         ),
@@ -316,7 +317,7 @@ class _TransactionFormState extends State<TransactionForm> {
                     ),
                     child: Text(
                       DateFormat.yMMMd().format(_selectedDate),
-                      style: const TextStyle(color: AppColors.primaryText),
+                      style: TextStyle(color: context.cPrimaryText),
                     ),
                   ),
                 ),
@@ -332,16 +333,14 @@ class _TransactionFormState extends State<TransactionForm> {
                       color: AppColors.darkCyan,
                     ),
                   ),
-                  dropdownColor: AppColors.cardBackground,
+                  dropdownColor: context.cCard,
                   items:
                       _categories.map((category) {
                         return DropdownMenuItem(
                           value: category,
                           child: Text(
                             category,
-                            style: const TextStyle(
-                              color: AppColors.primaryText,
-                            ),
+                            style: TextStyle(color: context.cPrimaryText),
                           ),
                         );
                       }).toList(),

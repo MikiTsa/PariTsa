@@ -3,8 +3,10 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:expenses_tracker/models/transaction.dart';
+import 'package:expenses_tracker/providers/app_settings.dart';
 import 'package:expenses_tracker/services/firebase_service.dart';
 import 'package:expenses_tracker/theme/app_colors.dart';
+import 'package:expenses_tracker/theme/theme_extensions.dart';
 
 enum _Period { thisMonth, last3Months, thisYear, allTime }
 
@@ -34,16 +36,16 @@ class _AnalyticsScreenState extends State<AnalyticsScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: context.cBackground,
       appBar: AppBar(
-        backgroundColor: AppColors.appBar,
-        foregroundColor: AppColors.primaryText,
+        backgroundColor: context.cAppBar,
+        foregroundColor: context.cPrimaryText,
         elevation: 0,
-        title: const Text(
+        title: Text(
           'Analytics',
           style: TextStyle(
             fontWeight: FontWeight.bold,
-            color: AppColors.primaryText,
+            color: context.cPrimaryText,
           ),
         ),
         bottom: TabBar(
@@ -160,7 +162,6 @@ class _AnalyticsTabState extends State<_AnalyticsTab>
     return map.entries.toList()..sort((a, b) => b.value.compareTo(a.value));
   }
 
-  /// Last 6 calendar months (oldest → newest).
   List<MapEntry<String, double>> get _monthlyTotals {
     final now = DateTime.now();
     return List.generate(6, (i) {
@@ -193,34 +194,35 @@ class _AnalyticsTabState extends State<_AnalyticsTab>
       );
     }
 
-    final filtered   = _filtered;
-    final total      = filtered.fold(0.0, (s, t) => s + t.amount);
-    final count      = filtered.length;
-    final avg        = count > 0 ? total / count : 0.0;
-    final categories = _categoryBreakdown;
-    final monthly    = _monthlyTotals;
-    final color      = _accentColor;
+    final settings    = AppSettingsScope.of(context);
+    final filtered    = _filtered;
+    final total       = filtered.fold(0.0, (s, t) => s + t.amount);
+    final count       = filtered.length;
+    final avg         = count > 0 ? total / count : 0.0;
+    final categories  = _categoryBreakdown;
+    final monthly     = _monthlyTotals;
+    final color       = _accentColor;
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildPeriodFilter(),
+          _buildPeriodFilter(context),
           const SizedBox(height: 16),
-          _buildSummaryRow(total, count, avg, color),
+          _buildSummaryRow(context, settings, total, count, avg, color),
           const SizedBox(height: 24),
 
           if (filtered.isEmpty)
-            _buildEmptyState()
+            _buildEmptyState(context)
           else ...[
-            _buildSectionHeader('By Category'),
+            _buildSectionHeader(context, 'By Category'),
             const SizedBox(height: 12),
-            _buildCategoryChart(categories, total, color),
+            _buildCategoryChart(context, settings, categories, total, color),
             const SizedBox(height: 24),
-            _buildSectionHeader('Monthly Trend'),
+            _buildSectionHeader(context, 'Monthly Trend'),
             const SizedBox(height: 12),
-            _buildMonthlyChart(monthly, color),
+            _buildMonthlyChart(context, settings, monthly, color),
             const SizedBox(height: 16),
           ],
         ],
@@ -230,17 +232,17 @@ class _AnalyticsTabState extends State<_AnalyticsTab>
 
   // ── Widgets ───────────────────────────────────────────────────────────────
 
-  Widget _buildEmptyState() {
+  Widget _buildEmptyState(BuildContext context) {
     return Center(
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 48),
         child: Column(
           children: [
-            Icon(Icons.bar_chart, size: 56, color: AppColors.mutedText),
+            Icon(Icons.bar_chart, size: 56, color: context.cMutedText),
             const SizedBox(height: 12),
-            const Text(
+            Text(
               'No data for this period',
-              style: TextStyle(color: AppColors.mutedText, fontSize: 16),
+              style: TextStyle(color: context.cMutedText, fontSize: 16),
             ),
           ],
         ),
@@ -248,12 +250,12 @@ class _AnalyticsTabState extends State<_AnalyticsTab>
     );
   }
 
-  Widget _buildPeriodFilter() {
+  Widget _buildPeriodFilter(BuildContext context) {
     const labels = {
-      _Period.thisMonth:    'This Month',
-      _Period.last3Months:  'Last 3 Months',
-      _Period.thisYear:     'This Year',
-      _Period.allTime:      'All Time',
+      _Period.thisMonth:   'This Month',
+      _Period.last3Months: 'Last 3 Months',
+      _Period.thisYear:    'This Year',
+      _Period.allTime:     'All Time',
     };
     final color = _accentColor;
 
@@ -271,12 +273,12 @@ class _AnalyticsTabState extends State<_AnalyticsTab>
               onSelected: (_) => setState(() => _period = e.key),
               selectedColor: color.withValues(alpha: 0.15),
               checkmarkColor: color,
-              backgroundColor: AppColors.inputFill,
+              backgroundColor: context.cInputFill,
               side: BorderSide(
                 color: selected ? color : Colors.transparent,
               ),
               labelStyle: TextStyle(
-                color: selected ? color : AppColors.mutedText,
+                color: selected ? color : context.cMutedText,
                 fontWeight: selected ? FontWeight.bold : FontWeight.normal,
                 fontSize: 13,
               ),
@@ -287,14 +289,20 @@ class _AnalyticsTabState extends State<_AnalyticsTab>
     );
   }
 
-  Widget _buildSummaryRow(double total, int count, double avg, Color color) {
-    final fmt = NumberFormat('#,##0.00');
+  Widget _buildSummaryRow(
+    BuildContext context,
+    AppSettings settings,
+    double total,
+    int count,
+    double avg,
+    Color color,
+  ) {
     return Row(
       children: [
         Expanded(
           child: _SummaryCard(
             label: 'Total',
-            value: '\$${fmt.format(total)}',
+            value: settings.formatAmountFull(total),
             color: color,
           ),
         ),
@@ -310,7 +318,7 @@ class _AnalyticsTabState extends State<_AnalyticsTab>
         Expanded(
           child: _SummaryCard(
             label: 'Average',
-            value: '\$${fmt.format(avg)}',
+            value: settings.formatAmountFull(avg),
             color: color,
           ),
         ),
@@ -318,25 +326,26 @@ class _AnalyticsTabState extends State<_AnalyticsTab>
     );
   }
 
-  Widget _buildSectionHeader(String title) {
+  Widget _buildSectionHeader(BuildContext context, String title) {
     return Text(
       title,
-      style: const TextStyle(
+      style: TextStyle(
         fontSize: 16,
         fontWeight: FontWeight.bold,
-        color: AppColors.primaryText,
+        color: context.cPrimaryText,
       ),
     );
   }
 
   Widget _buildCategoryChart(
+    BuildContext context,
+    AppSettings settings,
     List<MapEntry<String, double>> categories,
     double total,
     Color color,
   ) {
     if (categories.isEmpty) return const SizedBox.shrink();
     final maxVal = categories.first.value;
-    final amtFmt = NumberFormat('#,##0.00');
 
     return Card(
       elevation: 2,
@@ -357,10 +366,10 @@ class _AnalyticsTabState extends State<_AnalyticsTab>
                       Expanded(
                         child: Text(
                           e.key,
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 13,
                             fontWeight: FontWeight.w500,
-                            color: AppColors.primaryText,
+                            color: context.cPrimaryText,
                           ),
                           overflow: TextOverflow.ellipsis,
                         ),
@@ -368,9 +377,9 @@ class _AnalyticsTabState extends State<_AnalyticsTab>
                       const SizedBox(width: 8),
                       Text(
                         '${pct.toStringAsFixed(1)}%',
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 12,
-                          color: AppColors.mutedText,
+                          color: context.cMutedText,
                         ),
                       ),
                     ],
@@ -409,9 +418,9 @@ class _AnalyticsTabState extends State<_AnalyticsTab>
                       ),
                       const SizedBox(width: 10),
                       SizedBox(
-                        width: 72,
+                        width: 80,
                         child: Text(
-                          '\$${amtFmt.format(e.value)}',
+                          settings.formatAmountFull(e.value),
                           textAlign: TextAlign.right,
                           style: TextStyle(
                             fontSize: 12,
@@ -432,6 +441,8 @@ class _AnalyticsTabState extends State<_AnalyticsTab>
   }
 
   Widget _buildMonthlyChart(
+    BuildContext context,
+    AppSettings settings,
     List<MapEntry<String, double>> monthly,
     Color color,
   ) {
@@ -450,10 +461,10 @@ class _AnalyticsTabState extends State<_AnalyticsTab>
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: monthly.map((e) {
-              final fraction      = maxVal > 0 ? e.value / maxVal : 0.0;
-              final barHeight     = fraction * barMaxHeight;
-              final isCurrent     = e.key == currentMonthLabel;
-              final barColor      = isCurrent ? color : color.withValues(alpha: 0.45);
+              final fraction  = maxVal > 0 ? e.value / maxVal : 0.0;
+              final barHeight = fraction * barMaxHeight;
+              final isCurrent = e.key == currentMonthLabel;
+              final barColor  = isCurrent ? color : color.withValues(alpha: 0.45);
 
               return Expanded(
                 child: Padding(
@@ -461,7 +472,6 @@ class _AnalyticsTabState extends State<_AnalyticsTab>
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.end,
                     children: [
-                      // Amount label
                       SizedBox(
                         height: 16,
                         child: e.value > 0
@@ -471,30 +481,31 @@ class _AnalyticsTabState extends State<_AnalyticsTab>
                                 style: TextStyle(
                                   fontSize: 9,
                                   fontWeight: FontWeight.bold,
-                                  color: isCurrent ? color : AppColors.mutedText,
+                                  color: isCurrent ? color : context.cMutedText,
                                 ),
                               )
                             : null,
                       ),
                       const SizedBox(height: 2),
-                      // Bar
                       Container(
                         height: barHeight > 0 ? barHeight : 3,
                         decoration: BoxDecoration(
-                          color: barHeight > 0 ? barColor : color.withValues(alpha: 0.1),
+                          color: barHeight > 0
+                              ? barColor
+                              : color.withValues(alpha: 0.1),
                           borderRadius: const BorderRadius.vertical(
                             top: Radius.circular(4),
                           ),
                         ),
                       ),
                       const SizedBox(height: 6),
-                      // Month label
                       Text(
                         e.key,
                         style: TextStyle(
                           fontSize: 11,
-                          fontWeight: isCurrent ? FontWeight.bold : FontWeight.normal,
-                          color: isCurrent ? color : AppColors.mutedText,
+                          fontWeight:
+                              isCurrent ? FontWeight.bold : FontWeight.normal,
+                          color: isCurrent ? color : context.cMutedText,
                         ),
                       ),
                     ],
@@ -546,9 +557,9 @@ class _SummaryCard extends StatelessWidget {
             Text(
               label,
               textAlign: TextAlign.center,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 11,
-                color: AppColors.mutedText,
+                color: context.cMutedText,
               ),
             ),
           ],

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:expenses_tracker/models/transaction.dart';
 import 'package:expenses_tracker/services/firebase_service.dart';
 import 'package:expenses_tracker/theme/app_colors.dart';
+import 'package:expenses_tracker/theme/theme_extensions.dart';
 
 class CategoriesScreen extends StatefulWidget {
   const CategoriesScreen({super.key});
@@ -31,16 +32,16 @@ class _CategoriesScreenState extends State<CategoriesScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: context.cBackground,
       appBar: AppBar(
-        backgroundColor: AppColors.appBar,
-        foregroundColor: AppColors.primaryText,
+        backgroundColor: context.cAppBar,
+        foregroundColor: context.cPrimaryText,
         elevation: 0,
-        title: const Text(
+        title: Text(
           'Categories',
           style: TextStyle(
             fontWeight: FontWeight.bold,
-            color: AppColors.primaryText,
+            color: context.cPrimaryText,
           ),
         ),
         bottom: TabBar(
@@ -52,28 +53,19 @@ class _CategoriesScreenState extends State<CategoriesScreen>
             Tab(
               child: Text(
                 'Expenses',
-                style: TextStyle(
-                  color: AppColors.expense,
-                  fontWeight: FontWeight.bold,
-                ),
+                style: TextStyle(color: AppColors.expense, fontWeight: FontWeight.bold),
               ),
             ),
             Tab(
               child: Text(
                 'Incomes',
-                style: TextStyle(
-                  color: AppColors.income,
-                  fontWeight: FontWeight.bold,
-                ),
+                style: TextStyle(color: AppColors.income, fontWeight: FontWeight.bold),
               ),
             ),
             Tab(
               child: Text(
                 'Savings',
-                style: TextStyle(
-                  color: AppColors.saving,
-                  fontWeight: FontWeight.bold,
-                ),
+                style: TextStyle(color: AppColors.saving, fontWeight: FontWeight.bold),
               ),
             ),
           ],
@@ -110,7 +102,6 @@ class _CategoryTabState extends State<_CategoryTab>
   bool _loading = true;
   bool _saving = false;
 
-  // Undo state — cleared after 4 seconds or when undo is pressed
   String? _lastDeletedName;
   int? _lastDeletedIndex;
   Timer? _undoTimer;
@@ -153,7 +144,6 @@ class _CategoryTabState extends State<_CategoryTab>
   }
 
   Future<void> _onDismissed(String name, int index) async {
-    // Delete from Firestore immediately — Firestore is the source of truth
     try {
       await _firebaseService.deleteCategory(name, widget.type);
     } catch (_) {
@@ -170,7 +160,6 @@ class _CategoryTabState extends State<_CategoryTab>
 
     if (!mounted) return;
 
-    // Show inline undo banner for 4 seconds
     _undoTimer?.cancel();
     setState(() {
       _lastDeletedName = name;
@@ -244,11 +233,11 @@ class _CategoryTabState extends State<_CategoryTab>
       children: [
         Expanded(
           child: _categories.isEmpty
-              ? const Center(
+              ? Center(
                   child: Text(
                     'No categories yet.\nAdd one below.',
                     textAlign: TextAlign.center,
-                    style: TextStyle(color: AppColors.mutedText, fontSize: 15),
+                    style: TextStyle(color: context.cMutedText, fontSize: 15),
                   ),
                 )
               : ReorderableListView(
@@ -259,18 +248,18 @@ class _CategoryTabState extends State<_CategoryTab>
                     builder: (_, _) => Material(
                       elevation: 6,
                       borderRadius: BorderRadius.circular(8),
-                      color: AppColors.cardBackground,
+                      color: context.cCard,
                       child: child,
                     ),
                   ),
                   children: [
                     for (int i = 0; i < _categories.length; i++)
-                      _buildCategoryTile(_categories[i], i),
+                      _buildCategoryTile(context, _categories[i], i),
                   ],
                 ),
         ),
 
-        // Inline undo banner — shown for 4 s after a deletion
+        // Inline undo banner
         AnimatedSwitcher(
           duration: const Duration(milliseconds: 200),
           child: _lastDeletedName != null
@@ -281,7 +270,7 @@ class _CategoryTabState extends State<_CategoryTab>
                     horizontal: 16,
                     vertical: 10,
                   ),
-                  color: AppColors.primaryText,
+                  color: context.cPrimaryText,
                   child: Row(
                     children: [
                       Expanded(
@@ -320,10 +309,10 @@ class _CategoryTabState extends State<_CategoryTab>
             top: 10,
             bottom: MediaQuery.of(context).viewInsets.bottom + 16,
           ),
-          decoration: const BoxDecoration(
-            color: AppColors.cardBackground,
+          decoration: BoxDecoration(
+            color: context.cCard,
             border: Border(
-              top: BorderSide(color: AppColors.divider, width: 0.5),
+              top: BorderSide(color: context.cDivider, width: 0.5),
             ),
           ),
           child: Row(
@@ -332,12 +321,12 @@ class _CategoryTabState extends State<_CategoryTab>
                 child: TextField(
                   controller: _addController,
                   textCapitalization: TextCapitalization.words,
-                  style: const TextStyle(color: AppColors.primaryText),
+                  style: TextStyle(color: context.cPrimaryText),
                   decoration: InputDecoration(
                     hintText: 'New category name...',
-                    hintStyle: const TextStyle(color: AppColors.mutedText),
+                    hintStyle: TextStyle(color: context.cMutedText),
                     filled: true,
-                    fillColor: AppColors.inputFill,
+                    fillColor: context.cInputFill,
                     contentPadding: const EdgeInsets.symmetric(
                       horizontal: 14,
                       vertical: 10,
@@ -383,7 +372,7 @@ class _CategoryTabState extends State<_CategoryTab>
     );
   }
 
-  Widget _buildCategoryTile(String cat, int index) {
+  Widget _buildCategoryTile(BuildContext context, String cat, int index) {
     return Dismissible(
       key: ValueKey(cat),
       direction: DismissDirection.endToStart,
@@ -397,14 +386,14 @@ class _CategoryTabState extends State<_CategoryTab>
       child: ReorderableDelayedDragStartListener(
         index: index,
         child: ListTile(
-          leading: const Icon(
+          leading: Icon(
             Icons.drag_handle,
-            color: AppColors.mutedText,
+            color: context.cMutedText,
             size: 22,
           ),
           title: Text(
             cat,
-            style: const TextStyle(color: AppColors.primaryText, fontSize: 15),
+            style: TextStyle(color: context.cPrimaryText, fontSize: 15),
           ),
         ),
       ),

@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:expenses_tracker/models/transaction.dart';
+import 'package:expenses_tracker/providers/app_settings.dart';
 import 'package:expenses_tracker/theme/app_colors.dart';
+import 'package:expenses_tracker/theme/theme_extensions.dart';
 
 class TransactionList extends StatelessWidget {
   final List<Transaction> transactions;
@@ -41,6 +43,7 @@ class TransactionList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final settings = AppSettingsScope.of(context);
     final sortedTransactions = [...transactions]
       ..sort((a, b) => b.date.compareTo(a.date));
 
@@ -64,16 +67,16 @@ class TransactionList extends StatelessWidget {
               Padding(
                 padding: const EdgeInsets.only(top: 16, bottom: 8),
                 child: Text(
-                  _formatDateHeader(transaction.date),
-                  style: const TextStyle(
+                  _formatDateHeader(transaction.date, settings),
+                  style: TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.bold,
-                    color: AppColors.secondaryText,
+                    color: context.cSecondaryText,
                     letterSpacing: 0.3,
                   ),
                 ),
               ),
-              const Divider(color: AppColors.divider, thickness: 1),
+              Divider(color: context.cDivider, thickness: 1),
             ],
 
             Card(
@@ -90,9 +93,9 @@ class TransactionList extends StatelessWidget {
                 ),
                 title: Text(
                   transaction.title,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontWeight: FontWeight.bold,
-                    color: AppColors.primaryText,
+                    color: context.cPrimaryText,
                   ),
                 ),
                 subtitle: Wrap(
@@ -100,8 +103,8 @@ class TransactionList extends StatelessWidget {
                   children: [
                     Text(
                       transaction.category ?? 'No category',
-                      style: const TextStyle(
-                        color: AppColors.secondaryText,
+                      style: TextStyle(
+                        color: context.cSecondaryText,
                         fontSize: 12,
                       ),
                     ),
@@ -131,7 +134,7 @@ class TransactionList extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
                     Text(
-                      '\$${transaction.amount.toStringAsFixed(2)}',
+                      settings.formatAmount(transaction.amount),
                       style: TextStyle(
                         fontWeight: FontWeight.bold,
                         fontSize: 16,
@@ -140,14 +143,14 @@ class TransactionList extends StatelessWidget {
                     ),
                     Text(
                       DateFormat.jm().format(transaction.date),
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 12,
-                        color: AppColors.mutedText,
+                        color: context.cMutedText,
                       ),
                     ),
                   ],
                 ),
-                onTap: () => _showTransactionDetails(context, transaction),
+                onTap: () => _showTransactionDetails(context, transaction, settings),
                 onLongPress: () => _confirmDelete(context, transaction),
               ),
             ),
@@ -157,7 +160,7 @@ class TransactionList extends StatelessWidget {
     );
   }
 
-  String _formatDateHeader(DateTime date) {
+  String _formatDateHeader(DateTime date, AppSettings settings) {
     final now = DateTime.now();
     if (DateUtils.isSameDay(date, now)) return 'Today';
     if (DateUtils.isSameDay(
@@ -168,9 +171,8 @@ class TransactionList extends StatelessWidget {
     }
     if (date.isAfter(DateTime(now.year, now.month, now.day - 7))) {
       return DateFormat.EEEE().format(date);
-    } else {
-      return DateFormat.yMMMd().format(date);
     }
+    return settings.formatDate(date);
   }
 
   void _confirmDelete(BuildContext context, Transaction transaction) {
@@ -199,15 +201,19 @@ class TransactionList extends StatelessWidget {
     );
   }
 
-  void _showTransactionDetails(BuildContext context, Transaction transaction) {
+  void _showTransactionDetails(
+    BuildContext context,
+    Transaction transaction,
+    AppSettings settings,
+  ) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (context) => Container(
-        decoration: const BoxDecoration(
-          color: AppColors.cardBackground,
-          borderRadius: BorderRadius.only(
+        decoration: BoxDecoration(
+          color: context.cCard,
+          borderRadius: const BorderRadius.only(
             topLeft: Radius.circular(24),
             topRight: Radius.circular(24),
           ),
@@ -221,7 +227,7 @@ class TransactionList extends StatelessWidget {
               width: 40,
               height: 4,
               decoration: BoxDecoration(
-                color: AppColors.pearlAqua,
+                color: context.cMutedText.withValues(alpha: 0.5),
                 borderRadius: BorderRadius.circular(10),
               ),
             ),
@@ -247,16 +253,16 @@ class TransactionList extends StatelessWidget {
                     children: [
                       Text(
                         transaction.title,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.bold,
-                          color: AppColors.primaryText,
+                          color: context.cPrimaryText,
                         ),
                       ),
                       Text(
-                        DateFormat.yMMMd().add_jm().format(transaction.date),
-                        style: const TextStyle(
-                          color: AppColors.secondaryText,
+                        settings.formatDateWithTime(transaction.date),
+                        style: TextStyle(
+                          color: context.cSecondaryText,
                           fontSize: 13,
                         ),
                       ),
@@ -264,7 +270,7 @@ class TransactionList extends StatelessWidget {
                   ),
                 ),
                 Text(
-                  '\$${transaction.amount.toStringAsFixed(2)}',
+                  settings.formatAmount(transaction.amount),
                   style: TextStyle(
                     fontSize: 20,
                     fontWeight: FontWeight.bold,
@@ -284,6 +290,7 @@ class TransactionList extends StatelessWidget {
                     children: [
                       if (transaction.category != null) ...[
                         _buildDetailRow(
+                          context,
                           Icons.category_outlined,
                           'Category',
                           transaction.category!,
@@ -293,6 +300,7 @@ class TransactionList extends StatelessWidget {
                       ],
                       if (transaction.note != null)
                         _buildDetailRow(
+                          context,
                           Icons.note_outlined,
                           'Note',
                           transaction.note!,
@@ -301,6 +309,7 @@ class TransactionList extends StatelessWidget {
                         if (transaction.category != null || transaction.note != null)
                           const SizedBox(height: 12),
                         _buildDetailRow(
+                          context,
                           Icons.label_outline,
                           'Tag',
                           transaction.tag!,
@@ -330,7 +339,12 @@ class TransactionList extends StatelessWidget {
     );
   }
 
-  Widget _buildDetailRow(IconData icon, String label, String value) {
+  Widget _buildDetailRow(
+    BuildContext context,
+    IconData icon,
+    String label,
+    String value,
+  ) {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -342,16 +356,16 @@ class TransactionList extends StatelessWidget {
             children: [
               Text(
                 label,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 12,
-                  color: AppColors.mutedText,
+                  color: context.cMutedText,
                 ),
               ),
               Text(
                 value,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 16,
-                  color: AppColors.primaryText,
+                  color: context.cPrimaryText,
                 ),
               ),
             ],

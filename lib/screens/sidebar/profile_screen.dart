@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 import 'package:expenses_tracker/models/user_model.dart';
 import 'package:expenses_tracker/services/auth_service.dart';
 import 'package:expenses_tracker/theme/app_colors.dart';
+import 'package:expenses_tracker/theme/theme_extensions.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -98,14 +99,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final firebaseUser = _authService.currentUser;
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: context.cBackground,
       appBar: AppBar(
-        backgroundColor: AppColors.appBar,
-        foregroundColor: AppColors.primaryText,
+        backgroundColor: context.cAppBar,
+        foregroundColor: context.cPrimaryText,
         elevation: 0,
-        title: const Text(
+        title: Text(
           'Profile',
-          style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.primaryText),
+          style: TextStyle(fontWeight: FontWeight.bold, color: context.cPrimaryText),
         ),
       ),
       body: _loading
@@ -117,9 +118,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   Container(
                     width: double.infinity,
                     padding: const EdgeInsets.symmetric(vertical: 36),
-                    decoration: const BoxDecoration(
-                      color: AppColors.appBar,
-                      boxShadow: [
+                    decoration: BoxDecoration(
+                      color: context.cAppBar,
+                      boxShadow: const [
                         BoxShadow(
                           color: Color(0x11000000),
                           blurRadius: 6,
@@ -147,19 +148,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           children: [
                             Text(
                               firebaseUser?.displayName ?? 'No name set',
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontSize: 20,
                                 fontWeight: FontWeight.bold,
-                                color: AppColors.primaryText,
+                                color: context.cPrimaryText,
                               ),
                             ),
                             const SizedBox(width: 6),
                             GestureDetector(
                               onTap: _editDisplayName,
-                              child: const Icon(
+                              child: Icon(
                                 Icons.edit_outlined,
                                 size: 18,
-                                color: AppColors.mutedText,
+                                color: context.cMutedText,
                               ),
                             ),
                           ],
@@ -167,9 +168,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         const SizedBox(height: 4),
                         Text(
                           firebaseUser?.email ?? '',
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 14,
-                            color: AppColors.secondaryText,
+                            color: context.cSecondaryText,
                           ),
                         ),
                       ],
@@ -190,18 +191,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             value: firebaseUser?.displayName ?? '—',
                             trailing: IconButton(
                               icon: const Icon(Icons.edit_outlined, size: 18),
-                              color: AppColors.mutedText,
+                              color: context.cMutedText,
                               onPressed: _editDisplayName,
                               tooltip: 'Edit',
                             ),
                           ),
-                          const Divider(height: 1, color: AppColors.divider),
+                          Divider(height: 1, color: context.cDivider),
                           _InfoRow(
                             icon: Icons.email_outlined,
                             label: 'Email',
                             value: firebaseUser?.email ?? '—',
                           ),
-                          const Divider(height: 1, color: AppColors.divider),
+                          Divider(height: 1, color: context.cDivider),
                           _InfoRow(
                             icon: Icons.calendar_today_outlined,
                             label: 'Member since',
@@ -247,17 +248,17 @@ class _InfoRow extends StatelessWidget {
               children: [
                 Text(
                   label,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 11,
-                    color: AppColors.mutedText,
+                    color: context.cMutedText,
                   ),
                 ),
                 const SizedBox(height: 2),
                 Text(
                   value,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 15,
-                    color: AppColors.primaryText,
+                    color: context.cPrimaryText,
                   ),
                 ),
               ],

@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:expenses_tracker/models/transaction.dart';
+import 'package:expenses_tracker/providers/app_settings.dart';
 import 'package:expenses_tracker/screens/expenses_screen.dart';
 import 'package:expenses_tracker/screens/incomes_screen.dart';
 import 'package:expenses_tracker/screens/savings_screen.dart';
@@ -10,6 +11,7 @@ import 'package:expenses_tracker/widgets/app_drawer.dart';
 import 'package:expenses_tracker/services/firebase_service.dart';
 import 'package:expenses_tracker/services/auth_service.dart';
 import 'package:expenses_tracker/theme/app_colors.dart';
+import 'package:expenses_tracker/theme/theme_extensions.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -21,11 +23,12 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen>
     with SingleTickerProviderStateMixin {
   final _scaffoldKey = GlobalKey<ScaffoldState>();
-  late TabController _tabController;
+  TabController? _tabController;
   final FirebaseService _firebaseService = FirebaseService();
   final AuthService _authService = AuthService();
 
   final List<StreamSubscription<dynamic>> _subscriptions = [];
+  bool _initialized = false;
 
   List<Transaction> expenses = [];
   List<Transaction> incomes = [];
@@ -34,19 +37,28 @@ class _HomeScreenState extends State<HomeScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
-
-    _tabController.addListener(() {
-      if (!_tabController.indexIsChanging) {
-        setState(() {});
-      }
-    });
-
-    // Listen to Firebase streams
     _setupFirebaseListeners();
   }
 
-  // Setup real-time listeners for all transaction types
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_initialized) {
+      _initialized = true;
+      final defaultTab = AppSettingsScope.of(context).defaultTab;
+      _tabController = TabController(
+        length: 3,
+        vsync: this,
+        initialIndex: defaultTab,
+      );
+      _tabController!.addListener(() {
+        if (!_tabController!.indexIsChanging) {
+          setState(() {});
+        }
+      });
+    }
+  }
+
   void _setupFirebaseListeners() {
     _subscriptions.add(
       _firebaseService.getTransactionsStream(TransactionType.expense).listen((
@@ -78,54 +90,46 @@ class _HomeScreenState extends State<HomeScreen>
     for (final sub in _subscriptions) {
       sub.cancel();
     }
-    _tabController.dispose();
+    _tabController?.dispose();
     super.dispose();
   }
 
-  // Calculate current balance based on incomes, expenses, and savings
   double get currentBalance {
-    double income = incomes.fold(0, (sum, item) => sum + item.amount);
+    double income  = incomes.fold(0, (sum, item) => sum + item.amount);
     double expense = expenses.fold(0, (sum, item) => sum + item.amount);
-    double saving = savings.fold(0, (sum, item) => sum + item.amount);
+    double saving  = savings.fold(0, (sum, item) => sum + item.amount);
     return income - expense - saving;
   }
 
-  // Calculate total savings
   double get totalSavings {
     return savings.fold(0, (sum, item) => sum + item.amount);
   }
 
-  // Add transaction to Firebase
   Future<void> addTransaction(
     Transaction transaction,
     TransactionType type,
   ) async {
     try {
       await _firebaseService.addTransaction(transaction, type);
-      // No need to call setState - the stream listener will update automatically
     } catch (e) {
       _showErrorSnackBar('Failed to add transaction');
     }
   }
 
-  // Edit transaction in Firebase
   Future<void> editTransaction(
     Transaction updatedTransaction,
     TransactionType type,
   ) async {
     try {
       await _firebaseService.updateTransaction(updatedTransaction, type);
-      // No need to call setState - the stream listener will update automatically
     } catch (e) {
       _showErrorSnackBar('Failed to update transaction');
     }
   }
 
-  // Remove transaction from Firebase
   Future<void> removeTransaction(String id, TransactionType type) async {
     try {
       await _firebaseService.deleteTransaction(id, type);
-      // No need to call setState - the stream listener will update automatically
     } catch (e) {
       _showErrorSnackBar('Failed to delete transaction');
     }
@@ -138,26 +142,24 @@ class _HomeScreenState extends State<HomeScreen>
     );
   }
 
-  // 🔥 NEW: Logout function
   Future<void> _handleLogout() async {
     final shouldLogout = await showDialog<bool>(
       context: context,
-      builder:
-          (context) => AlertDialog(
-            title: const Text('Logout'),
-            content: const Text('Are you sure you want to logout?'),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context, false),
-                child: const Text('Cancel'),
-              ),
-              TextButton(
-                onPressed: () => Navigator.pop(context, true),
-                style: TextButton.styleFrom(foregroundColor: Colors.red),
-                child: const Text('Logout'),
-              ),
-            ],
+      builder: (context) => AlertDialog(
+        title: const Text('Logout'),
+        content: const Text('Are you sure you want to logout?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
           ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Logout'),
+          ),
+        ],
+      ),
     );
 
     if (shouldLogout == true) {
@@ -171,6 +173,9 @@ class _HomeScreenState extends State<HomeScreen>
 
   @override
   Widget build(BuildContext context) {
+    final tabCtrl = _tabController;
+    if (tabCtrl == null) return const SizedBox.shrink();
+
     return Scaffold(
       key: _scaffoldKey,
       drawer: const AppDrawer(),
@@ -180,19 +185,19 @@ class _HomeScreenState extends State<HomeScreen>
           children: [
             Column(
               children: [
-                // Custom App Bar with title and tab bar
+                // Custom App Bar
                 Container(
                   padding: const EdgeInsets.symmetric(
                     vertical: 16,
                     horizontal: 8,
                   ),
-                  decoration: const BoxDecoration(
-                    color: AppColors.appBar,
+                  decoration: BoxDecoration(
+                    color: context.cAppBar,
                     boxShadow: [
                       BoxShadow(
-                        color: Color(0x33000000),
+                        color: const Color(0x33000000),
                         blurRadius: 6,
-                        offset: Offset(0, 3),
+                        offset: const Offset(0, 3),
                       ),
                     ],
                   ),
@@ -206,14 +211,14 @@ class _HomeScreenState extends State<HomeScreen>
                                 _scaffoldKey.currentState?.openDrawer(),
                             icon: const Icon(Icons.menu),
                             tooltip: 'Menu',
-                            color: AppColors.primaryText,
+                            color: context.cPrimaryText,
                           ),
-                          const Text(
+                          Text(
                             'PariTsa',
                             style: TextStyle(
                               fontSize: 22,
                               fontWeight: FontWeight.bold,
-                              color: AppColors.appBarText,
+                              color: context.cPrimaryText,
                               letterSpacing: 0.5,
                             ),
                           ),
@@ -232,12 +237,12 @@ class _HomeScreenState extends State<HomeScreen>
                           return Stack(
                             children: [
                               TabBar(
-                                controller: _tabController,
+                                controller: tabCtrl,
                                 indicatorWeight: 3,
                                 indicatorColor: AppColors.pearlAqua,
                                 dividerColor: Colors.transparent,
-                                labelColor: AppColors.appBarText,
-                                unselectedLabelColor: AppColors.mutedText,
+                                labelColor: context.cPrimaryText,
+                                unselectedLabelColor: context.cMutedText,
                                 tabs: const [
                                   Tab(
                                     child: Text(
@@ -297,53 +302,30 @@ class _HomeScreenState extends State<HomeScreen>
                 // Tab content
                 Expanded(
                   child: TabBarView(
-                    controller: _tabController,
+                    controller: tabCtrl,
                     children: [
-                      // Expenses Tab
                       ExpensesScreen(
                         expenses: expenses,
-                        onAddExpense:
-                            (transaction) => addTransaction(
-                              transaction,
-                              TransactionType.expense,
-                            ),
-                        onEditExpense:
-                            (transaction) => editTransaction(
-                              transaction,
-                              TransactionType.expense,
-                            ),
+                        onAddExpense: (t) =>
+                            addTransaction(t, TransactionType.expense),
+                        onEditExpense: (t) =>
+                            editTransaction(t, TransactionType.expense),
                         onRemoveTransaction: removeTransaction,
                       ),
-
-                      // Incomes Tab
                       IncomesScreen(
                         incomes: incomes,
-                        onAddIncome:
-                            (transaction) => addTransaction(
-                              transaction,
-                              TransactionType.income,
-                            ),
-                        onEditIncome:
-                            (transaction) => editTransaction(
-                              transaction,
-                              TransactionType.income,
-                            ),
+                        onAddIncome: (t) =>
+                            addTransaction(t, TransactionType.income),
+                        onEditIncome: (t) =>
+                            editTransaction(t, TransactionType.income),
                         onRemoveTransaction: removeTransaction,
                       ),
-
-                      // Savings Tab
                       SavingsScreen(
                         savings: savings,
-                        onAddSaving:
-                            (transaction) => addTransaction(
-                              transaction,
-                              TransactionType.saving,
-                            ),
-                        onEditSaving:
-                            (transaction) => editTransaction(
-                              transaction,
-                              TransactionType.saving,
-                            ),
+                        onAddSaving: (t) =>
+                            addTransaction(t, TransactionType.saving),
+                        onEditSaving: (t) =>
+                            editTransaction(t, TransactionType.saving),
                         onRemoveTransaction: removeTransaction,
                       ),
                     ],
@@ -352,15 +334,14 @@ class _HomeScreenState extends State<HomeScreen>
               ],
             ),
 
-            // Floating balance box - positioned on the left side
+            // Floating balance box
             Positioned(
               left: 16,
               bottom: 20,
               child: BalanceBox(
-                amount:
-                    _tabController.index == 2 ? totalSavings : currentBalance,
-                isSavings: _tabController.index == 2,
-                activeTabIndex: _tabController.index,
+                amount: tabCtrl.index == 2 ? totalSavings : currentBalance,
+                isSavings: tabCtrl.index == 2,
+                activeTabIndex: tabCtrl.index,
               ),
             ),
           ],
@@ -369,4 +350,3 @@ class _HomeScreenState extends State<HomeScreen>
     );
   }
 }
-

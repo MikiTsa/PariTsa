@@ -1,16 +1,18 @@
 import 'package:flutter/material.dart';
+import 'package:expenses_tracker/dev/seed_data.dart';
 import 'package:expenses_tracker/screens/sidebar/categories_screen.dart';
 import 'package:expenses_tracker/screens/sidebar/history_screen.dart';
 import 'package:expenses_tracker/screens/sidebar/analytics_screen.dart';
 import 'package:expenses_tracker/screens/sidebar/profile_screen.dart';
 import 'package:expenses_tracker/screens/sidebar/settings_screen.dart';
 import 'package:expenses_tracker/theme/app_colors.dart';
+import 'package:expenses_tracker/theme/theme_extensions.dart';
 
 class AppDrawer extends StatelessWidget {
   const AppDrawer({super.key});
 
   void _navigate(BuildContext context, Widget screen) {
-    Navigator.pop(context); // close drawer
+    Navigator.pop(context);
     Navigator.push(
       context,
       MaterialPageRoute(builder: (_) => screen),
@@ -21,11 +23,11 @@ class AppDrawer extends StatelessWidget {
   Widget build(BuildContext context) {
     return Drawer(
       width: 280,
-      backgroundColor: AppColors.background,
+      backgroundColor: context.cBackground,
       child: SafeArea(
         child: Column(
           children: [
-            // Header
+            // Header — always primary brand colour, no theme switch needed
             Container(
               width: double.infinity,
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
@@ -64,7 +66,6 @@ class AppDrawer extends StatelessWidget {
 
             const SizedBox(height: 8),
 
-            // Nav items
             _DrawerItem(
               icon: Icons.person_outline,
               label: 'Profile',
@@ -87,13 +88,44 @@ class AppDrawer extends StatelessWidget {
             ),
 
             const Spacer(),
-            const Divider(color: AppColors.divider, height: 1),
+            Divider(color: context.cDivider, height: 1),
             const SizedBox(height: 4),
 
             _DrawerItem(
               icon: Icons.settings_outlined,
               label: 'Settings',
               onTap: () => _navigate(context, const SettingsScreen()),
+            ),
+            // TODO: remove — dev only
+            _DrawerItem(
+              icon: Icons.science_outlined,
+              label: 'Seed Test Data',
+              onTap: () async {
+                final confirmed = await showDialog<bool>(
+                  context: context,
+                  builder: (_) => AlertDialog(
+                    title: const Text('Seed test data?'),
+                    content: const Text(
+                      'This will add 30 expenses, 12 incomes, and 8 savings entries '
+                      'prefixed with "test_". Run only once.',
+                    ),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(context, false),
+                        child: const Text('Cancel'),
+                      ),
+                      TextButton(
+                        onPressed: () => Navigator.pop(context, true),
+                        child: const Text('Seed'),
+                      ),
+                    ],
+                  ),
+                );
+                if (confirmed == true && context.mounted) {
+                  Navigator.pop(context);
+                  await seedTestData();
+                }
+              },
             ),
             const SizedBox(height: 8),
           ],
@@ -117,11 +149,11 @@ class _DrawerItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ListTile(
-      leading: Icon(icon, color: AppColors.primaryText, size: 22),
+      leading: Icon(icon, color: context.cPrimaryText, size: 22),
       title: Text(
         label,
-        style: const TextStyle(
-          color: AppColors.primaryText,
+        style: TextStyle(
+          color: context.cPrimaryText,
           fontSize: 15,
           fontWeight: FontWeight.w500,
         ),

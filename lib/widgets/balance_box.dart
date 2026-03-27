@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:expenses_tracker/providers/app_settings.dart';
 import 'package:expenses_tracker/theme/app_colors.dart';
 
 class BalanceBox extends StatelessWidget {
@@ -15,7 +16,8 @@ class BalanceBox extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final String formattedAmount = amount.toStringAsFixed(2);
+    final settings = AppSettingsScope.of(context);
+    final String formatted = settings.formatAmount(amount);
     final Color base = _getBaseColor();
 
     return Container(
@@ -46,7 +48,7 @@ class BalanceBox extends StatelessWidget {
           ),
           const SizedBox(height: 4),
           Text(
-            '\$$formattedAmount',
+            formatted,
             style: const TextStyle(
               color: Colors.white,
               fontSize: 20,
