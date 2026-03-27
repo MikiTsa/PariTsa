@@ -16,6 +16,7 @@ class CategoriesScreen extends StatefulWidget {
 class _CategoriesScreenState extends State<CategoriesScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
+  final _popNotifier = ValueNotifier<bool>(false);
 
   @override
   void initState() {
@@ -26,58 +27,64 @@ class _CategoriesScreenState extends State<CategoriesScreen>
   @override
   void dispose() {
     _tabController.dispose();
+    _popNotifier.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: context.cBackground,
-      appBar: AppBar(
-        backgroundColor: context.cAppBar,
-        foregroundColor: context.cPrimaryText,
-        elevation: 0,
-        title: Text(
-          'Categories',
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-            color: context.cPrimaryText,
+    return PopScope(
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) _popNotifier.value = true;
+      },
+      child: Scaffold(
+        backgroundColor: context.cBackground,
+        appBar: AppBar(
+          backgroundColor: context.cAppBar,
+          foregroundColor: context.cPrimaryText,
+          elevation: 0,
+          title: Text(
+            'Categories',
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              color: context.cPrimaryText,
+            ),
+          ),
+          bottom: TabBar(
+            controller: _tabController,
+            indicatorWeight: 3,
+            indicatorColor: AppColors.pearlAqua,
+            dividerColor: Colors.transparent,
+            tabs: const [
+              Tab(
+                child: Text(
+                  'Expenses',
+                  style: TextStyle(color: AppColors.expense, fontWeight: FontWeight.bold),
+                ),
+              ),
+              Tab(
+                child: Text(
+                  'Incomes',
+                  style: TextStyle(color: AppColors.income, fontWeight: FontWeight.bold),
+                ),
+              ),
+              Tab(
+                child: Text(
+                  'Savings',
+                  style: TextStyle(color: AppColors.saving, fontWeight: FontWeight.bold),
+                ),
+              ),
+            ],
           ),
         ),
-        bottom: TabBar(
+        body: TabBarView(
           controller: _tabController,
-          indicatorWeight: 3,
-          indicatorColor: AppColors.pearlAqua,
-          dividerColor: Colors.transparent,
-          tabs: const [
-            Tab(
-              child: Text(
-                'Expenses',
-                style: TextStyle(color: AppColors.expense, fontWeight: FontWeight.bold),
-              ),
-            ),
-            Tab(
-              child: Text(
-                'Incomes',
-                style: TextStyle(color: AppColors.income, fontWeight: FontWeight.bold),
-              ),
-            ),
-            Tab(
-              child: Text(
-                'Savings',
-                style: TextStyle(color: AppColors.saving, fontWeight: FontWeight.bold),
-              ),
-            ),
+          children: [
+            _CategoryTab(type: TransactionType.expense, color: AppColors.expense, popNotifier: _popNotifier),
+            _CategoryTab(type: TransactionType.income, color: AppColors.income, popNotifier: _popNotifier),
+            _CategoryTab(type: TransactionType.saving, color: AppColors.saving, popNotifier: _popNotifier),
           ],
         ),
-      ),
-      body: TabBarView(
-        controller: _tabController,
-        children: const [
-          _CategoryTab(type: TransactionType.expense, color: AppColors.expense),
-          _CategoryTab(type: TransactionType.income, color: AppColors.income),
-          _CategoryTab(type: TransactionType.saving, color: AppColors.saving),
-        ],
       ),
     );
   }
@@ -86,8 +93,9 @@ class _CategoriesScreenState extends State<CategoriesScreen>
 class _CategoryTab extends StatefulWidget {
   final TransactionType type;
   final Color color;
+  final ValueNotifier<bool> popNotifier;
 
-  const _CategoryTab({required this.type, required this.color});
+  const _CategoryTab({required this.type, required this.color, required this.popNotifier});
 
   @override
   State<_CategoryTab> createState() => _CategoryTabState();
@@ -114,10 +122,11 @@ class _CategoryTabState extends State<_CategoryTab>
   @override
   void initState() {
     super.initState();
+    widget.popNotifier.addListener(_onPop);
     _subscription = _firebaseService
         .getCategoriesStream(widget.type)
         .listen((cats) {
-          if (mounted) {
+          if (mounted && !widget.popNotifier.value) {
             setState(() {
               _categories = cats;
               _loading = false;
@@ -126,8 +135,16 @@ class _CategoryTabState extends State<_CategoryTab>
         });
   }
 
+  void _onPop() {
+    if (widget.popNotifier.value) {
+      _subscription?.cancel();
+      _subscription = null;
+    }
+  }
+
   @override
   void dispose() {
+    widget.popNotifier.removeListener(_onPop);
     _undoTimer?.cancel();
     _subscription?.cancel();
     _addController.dispose();

@@ -24,6 +24,7 @@ class HistoryScreen extends StatefulWidget {
 class _HistoryScreenState extends State<HistoryScreen> {
   final _service = FirebaseService();
   final List<StreamSubscription<dynamic>> _subs = [];
+  bool _popping = false;
 
   List<Transaction> _expenses = [];
   List<Transaction> _incomes = [];
@@ -34,17 +35,17 @@ class _HistoryScreenState extends State<HistoryScreen> {
     super.initState();
     _subs.add(
       _service.getTransactionsStream(TransactionType.expense).listen((list) {
-        if (mounted) setState(() => _expenses = list);
+        if (mounted && !_popping) setState(() => _expenses = list);
       }),
     );
     _subs.add(
       _service.getTransactionsStream(TransactionType.income).listen((list) {
-        if (mounted) setState(() => _incomes = list);
+        if (mounted && !_popping) setState(() => _incomes = list);
       }),
     );
     _subs.add(
       _service.getTransactionsStream(TransactionType.saving).listen((list) {
-        if (mounted) setState(() => _savings = list);
+        if (mounted && !_popping) setState(() => _savings = list);
       }),
     );
   }
@@ -234,7 +235,11 @@ class _HistoryScreenState extends State<HistoryScreen> {
     final entries = _sorted;
     final settings = AppSettingsScope.of(context);
 
-    return Scaffold(
+    return PopScope(
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) _popping = true;
+      },
+      child: Scaffold(
       backgroundColor: context.cBackground,
       appBar: AppBar(
         backgroundColor: context.cAppBar,
@@ -373,6 +378,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                 );
               },
             ),
+      ),
     );
   }
 }

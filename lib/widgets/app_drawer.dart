@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:expenses_tracker/dev/seed_data.dart';
 import 'package:expenses_tracker/screens/sidebar/categories_screen.dart';
 import 'package:expenses_tracker/screens/sidebar/history_screen.dart';
 import 'package:expenses_tracker/screens/sidebar/analytics_screen.dart';
@@ -8,15 +7,26 @@ import 'package:expenses_tracker/screens/sidebar/settings_screen.dart';
 import 'package:expenses_tracker/theme/app_colors.dart';
 import 'package:expenses_tracker/theme/theme_extensions.dart';
 
+/// A [MaterialPageRoute] with Flutter's own swipe-to-pop gesture disabled.
+///
+/// Android's predictive back (via [OnBackInvokedCallback]) still works because
+/// it goes through a separate code path. Disabling the gesture detector here
+/// prevents the double-handling that causes the
+/// `_userGesturesInProgress > 0` assertion failure when a predictive-back
+/// swipe and a programmatic pop race each other.
+class _SidebarRoute<T> extends MaterialPageRoute<T> {
+  _SidebarRoute({required super.builder});
+
+  @override
+  bool get popGestureEnabled => false;
+}
+
 class AppDrawer extends StatelessWidget {
   const AppDrawer({super.key});
 
   void _navigate(BuildContext context, Widget screen) {
     Navigator.pop(context);
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (_) => screen),
-    );
+    Navigator.push(context, _SidebarRoute(builder: (_) => screen));
   }
 
   @override
@@ -95,37 +105,6 @@ class AppDrawer extends StatelessWidget {
               icon: Icons.settings_outlined,
               label: 'Settings',
               onTap: () => _navigate(context, const SettingsScreen()),
-            ),
-            // TODO: remove — dev only
-            _DrawerItem(
-              icon: Icons.science_outlined,
-              label: 'Seed Test Data',
-              onTap: () async {
-                final confirmed = await showDialog<bool>(
-                  context: context,
-                  builder: (_) => AlertDialog(
-                    title: const Text('Seed test data?'),
-                    content: const Text(
-                      'This will add 30 expenses, 12 incomes, and 8 savings entries '
-                      'prefixed with "test_". Run only once.',
-                    ),
-                    actions: [
-                      TextButton(
-                        onPressed: () => Navigator.pop(context, false),
-                        child: const Text('Cancel'),
-                      ),
-                      TextButton(
-                        onPressed: () => Navigator.pop(context, true),
-                        child: const Text('Seed'),
-                      ),
-                    ],
-                  ),
-                );
-                if (confirmed == true && context.mounted) {
-                  Navigator.pop(context);
-                  await seedTestData();
-                }
-              },
             ),
             const SizedBox(height: 8),
           ],

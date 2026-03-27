@@ -20,6 +20,7 @@ class AnalyticsScreen extends StatefulWidget {
 class _AnalyticsScreenState extends State<AnalyticsScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
+  final _popNotifier = ValueNotifier<bool>(false);
 
   @override
   void initState() {
@@ -30,67 +31,73 @@ class _AnalyticsScreenState extends State<AnalyticsScreen>
   @override
   void dispose() {
     _tabController.dispose();
+    _popNotifier.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: context.cBackground,
-      appBar: AppBar(
-        backgroundColor: context.cAppBar,
-        foregroundColor: context.cPrimaryText,
-        elevation: 0,
-        title: Text(
-          'Analytics',
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-            color: context.cPrimaryText,
+    return PopScope(
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) _popNotifier.value = true;
+      },
+      child: Scaffold(
+        backgroundColor: context.cBackground,
+        appBar: AppBar(
+          backgroundColor: context.cAppBar,
+          foregroundColor: context.cPrimaryText,
+          elevation: 0,
+          title: Text(
+            'Analytics',
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              color: context.cPrimaryText,
+            ),
+          ),
+          bottom: TabBar(
+            controller: _tabController,
+            indicatorWeight: 3,
+            indicatorColor: AppColors.pearlAqua,
+            dividerColor: Colors.transparent,
+            tabs: const [
+              Tab(
+                child: Text(
+                  'Expenses',
+                  style: TextStyle(
+                    color: AppColors.expense,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+              Tab(
+                child: Text(
+                  'Incomes',
+                  style: TextStyle(
+                    color: AppColors.income,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+              Tab(
+                child: Text(
+                  'Savings',
+                  style: TextStyle(
+                    color: AppColors.saving,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
-        bottom: TabBar(
+        body: TabBarView(
           controller: _tabController,
-          indicatorWeight: 3,
-          indicatorColor: AppColors.pearlAqua,
-          dividerColor: Colors.transparent,
-          tabs: const [
-            Tab(
-              child: Text(
-                'Expenses',
-                style: TextStyle(
-                  color: AppColors.expense,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ),
-            Tab(
-              child: Text(
-                'Incomes',
-                style: TextStyle(
-                  color: AppColors.income,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ),
-            Tab(
-              child: Text(
-                'Savings',
-                style: TextStyle(
-                  color: AppColors.saving,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ),
+          children: [
+            _AnalyticsTab(type: TransactionType.expense, popNotifier: _popNotifier),
+            _AnalyticsTab(type: TransactionType.income, popNotifier: _popNotifier),
+            _AnalyticsTab(type: TransactionType.saving, popNotifier: _popNotifier),
           ],
         ),
-      ),
-      body: TabBarView(
-        controller: _tabController,
-        children: const [
-          _AnalyticsTab(type: TransactionType.expense),
-          _AnalyticsTab(type: TransactionType.income),
-          _AnalyticsTab(type: TransactionType.saving),
-        ],
       ),
     );
   }
@@ -100,7 +107,8 @@ class _AnalyticsScreenState extends State<AnalyticsScreen>
 
 class _AnalyticsTab extends StatefulWidget {
   final TransactionType type;
-  const _AnalyticsTab({required this.type});
+  final ValueNotifier<bool> popNotifier;
+  const _AnalyticsTab({required this.type, required this.popNotifier});
 
   @override
   State<_AnalyticsTab> createState() => _AnalyticsTabState();
@@ -121,13 +129,24 @@ class _AnalyticsTabState extends State<_AnalyticsTab>
   @override
   void initState() {
     super.initState();
+    widget.popNotifier.addListener(_onPop);
     _sub = _service.getTransactionsStream(widget.type).listen((list) {
-      if (mounted) setState(() { _all = list; _loading = false; });
+      if (mounted && !widget.popNotifier.value) {
+        setState(() { _all = list; _loading = false; });
+      }
     });
+  }
+
+  void _onPop() {
+    if (widget.popNotifier.value) {
+      _sub?.cancel();
+      _sub = null;
+    }
   }
 
   @override
   void dispose() {
+    widget.popNotifier.removeListener(_onPop);
     _sub?.cancel();
     super.dispose();
   }

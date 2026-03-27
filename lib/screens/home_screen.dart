@@ -51,11 +51,7 @@ class _HomeScreenState extends State<HomeScreen>
         vsync: this,
         initialIndex: defaultTab,
       );
-      _tabController!.addListener(() {
-        if (!_tabController!.indexIsChanging) {
-          setState(() {});
-        }
-      });
+      // No listener needed — AnimatedBuilder on tabCtrl.animation handles BalanceBox redraws.
     }
   }
 
@@ -103,6 +99,19 @@ class _HomeScreenState extends State<HomeScreen>
 
   double get totalSavings {
     return savings.fold(0, (sum, item) => sum + item.amount);
+  }
+
+  Color _interpolateTabColor(double value) {
+    const colors = [
+      AppColors.balanceExpense,
+      AppColors.balanceIncome,
+      AppColors.balanceSaving,
+    ];
+    final clamped = value.clamp(0.0, 2.0);
+    if (clamped <= 0) return colors[0];
+    if (clamped >= 2) return colors[2];
+    final lower = clamped.floor().clamp(0, 1);
+    return Color.lerp(colors[lower], colors[lower + 1], clamped - lower)!;
   }
 
   Future<void> addTransaction(
@@ -303,6 +312,7 @@ class _HomeScreenState extends State<HomeScreen>
                 Expanded(
                   child: TabBarView(
                     controller: tabCtrl,
+                    physics: const _EasySwipeTabPhysics(),
                     children: [
                       ExpensesScreen(
                         expenses: expenses,
@@ -334,19 +344,85 @@ class _HomeScreenState extends State<HomeScreen>
               ],
             ),
 
-            // Floating balance box
+            // Floating balance box — AnimatedBuilder redraws on every animation
+            // frame so the colour interpolates continuously during swipe/tap.
             Positioned(
               left: 16,
               bottom: 20,
-              child: BalanceBox(
-                amount: tabCtrl.index == 2 ? totalSavings : currentBalance,
-                isSavings: tabCtrl.index == 2,
-                activeTabIndex: tabCtrl.index,
+              child: AnimatedBuilder(
+                animation: tabCtrl.animation!,
+                builder: (context, _) {
+                  final animIdx = tabCtrl.animation!.value.round().clamp(0, 2);
+                  return BalanceBox(
+                    amount: animIdx == 2 ? totalSavings : currentBalance,
+                    isSavings: animIdx == 2,
+                    baseColor: _interpolateTabColor(tabCtrl.animation!.value),
+                  );
+                },
               ),
             ),
           ],
         ),
       ),
+    );
+  }
+}
+
+/// [PageScrollPhysics] that lowers the drag threshold needed to commit a tab
+/// switch from the default 50 % to ~30 %.
+///
+/// A fast fling (≥ 300 px/s) always commits at any drag position, identical to
+/// Flutter's default behaviour.  A slow swipe or deliberate drag only needs
+/// ~30 % of the tab width before the page snaps over.
+class _EasySwipeTabPhysics extends PageScrollPhysics {
+  const _EasySwipeTabPhysics({super.parent});
+
+  // Velocity above which we treat the gesture as a full fling and always commit.
+  static const double _kFlingVelocity = 300.0;
+
+  // Bias applied when rounding the page position:
+  //   roundToDouble(page ± bias) = next/prev page when |drag| >= (0.5 - bias)
+  // Fast fling: bias 0.5 → always commits regardless of drag distance.
+  // Slow swipe: bias 0.2 → commits once drag ≥ 30 % of the tab width.
+  static const double _kFastBias = 0.5;
+  static const double _kSlowBias = 0.2;
+
+  @override
+  _EasySwipeTabPhysics applyTo(ScrollPhysics? ancestor) {
+    return _EasySwipeTabPhysics(parent: buildParent(ancestor));
+  }
+
+  @override
+  Simulation? createBallisticSimulation(ScrollMetrics position, double velocity) {
+    // At the boundary, fall back to the parent physics (ClampingScrollPhysics).
+    if ((velocity <= 0.0 && position.pixels <= position.minScrollExtent) ||
+        (velocity >= 0.0 && position.pixels >= position.maxScrollExtent)) {
+      return super.createBallisticSimulation(position, velocity);
+    }
+
+    final tolerance = toleranceFor(position);
+    final double page = position.pixels / position.viewportDimension;
+
+    final double targetPage;
+    if (velocity > _kFlingVelocity) {
+      targetPage = (page + _kFastBias).roundToDouble();
+    } else if (velocity < -_kFlingVelocity) {
+      targetPage = (page - _kFastBias).roundToDouble();
+    } else if (velocity > tolerance.velocity) {
+      targetPage = (page + _kSlowBias).roundToDouble();
+    } else if (velocity < -tolerance.velocity) {
+      targetPage = (page - _kSlowBias).roundToDouble();
+    } else {
+      targetPage = page.roundToDouble();
+    }
+
+    final double targetPixels = (targetPage * position.viewportDimension)
+        .clamp(position.minScrollExtent, position.maxScrollExtent);
+
+    if (targetPixels == position.pixels) return null;
+    return ScrollSpringSimulation(
+      spring, position.pixels, targetPixels, velocity,
+      tolerance: tolerance,
     );
   }
 }
