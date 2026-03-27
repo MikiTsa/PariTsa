@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:expenses_tracker/models/transaction.dart';
 import 'package:expenses_tracker/providers/app_settings.dart';
 import 'package:expenses_tracker/screens/expenses_screen.dart';
@@ -8,6 +9,7 @@ import 'package:expenses_tracker/screens/incomes_screen.dart';
 import 'package:expenses_tracker/screens/savings_screen.dart';
 import 'package:expenses_tracker/widgets/balance_box.dart';
 import 'package:expenses_tracker/widgets/app_drawer.dart';
+import 'package:expenses_tracker/widgets/transaction_form.dart';
 import 'package:expenses_tracker/services/firebase_service.dart';
 import 'package:expenses_tracker/services/auth_service.dart';
 import 'package:expenses_tracker/services/local_notification_service.dart';
@@ -23,6 +25,8 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen>
     with SingleTickerProviderStateMixin {
+  static const _widgetChannel = MethodChannel('com.example.expenses_tracker/widget');
+
   final _scaffoldKey = GlobalKey<ScaffoldState>();
   TabController? _tabController;
   final FirebaseService _firebaseService = FirebaseService();
@@ -53,7 +57,52 @@ class _HomeScreenState extends State<HomeScreen>
         initialIndex: defaultTab,
       );
       // No listener needed — AnimatedBuilder on tabCtrl.animation handles BalanceBox redraws.
+
+      // Listen for widget taps while the app is already running (onNewIntent path).
+      _widgetChannel.setMethodCallHandler((call) async {
+        if (call.method == 'openTransaction') {
+          _openTransactionForm(call.arguments as String? ?? '');
+        }
+      });
+
+      // Check if the app was cold-launched from a widget.
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        try {
+          final action =
+              await _widgetChannel.invokeMethod<String?>('checkLaunchAction');
+          if (action != null && mounted) _openTransactionForm(action);
+        } catch (_) {}
+      });
     }
+  }
+
+  void _openTransactionForm(String action) {
+    final int tabIndex;
+    final TransactionType type;
+    switch (action) {
+      case 'add_income':
+        tabIndex = 1;
+        type = TransactionType.income;
+      case 'add_saving':
+        tabIndex = 2;
+        type = TransactionType.saving;
+      default:
+        tabIndex = 0;
+        type = TransactionType.expense;
+    }
+    _tabController?.animateTo(tabIndex);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      showModalBottomSheet(
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: Colors.transparent,
+        builder: (_) => TransactionForm(
+          transactionType: type,
+          onSave: (t) => addTransaction(t, type),
+        ),
+      );
+    });
   }
 
   void _setupFirebaseListeners() {

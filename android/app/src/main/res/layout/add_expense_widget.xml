@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Outer frame fills the whole cell but is transparent — click target -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+    <!-- Size is overridden at runtime in AddExpenseWidget.kt; 64dp is the fallback -->
+    <FrameLayout
+        android:id="@+id/widget_circle"
+        android:layout_width="64dp"
+        android:layout_height="64dp"
+        android:layout_gravity="center"
+        android:background="@drawable/widget_background">
+
+        <ImageView
+            android:layout_width="28dp"
+            android:layout_height="28dp"
+            android:layout_gravity="center"
+            android:src="@drawable/ic_widget_add"
+            android:contentDescription="Add Expense" />
+
+    </FrameLayout>
+
+</FrameLayout>

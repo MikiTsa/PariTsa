@@ -42,6 +42,32 @@
             </intent-filter>
         </service>
 
+        <!-- Home-screen widgets: each opens the app directly to the matching add form. -->
+        <receiver android:name=".AddExpenseWidget" android:exported="true" android:label="Add Expense">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/add_expense_widget_info" />
+        </receiver>
+        <receiver android:name=".AddIncomeWidget" android:exported="true" android:label="Add Income">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/add_income_widget_info" />
+        </receiver>
+        <receiver android:name=".AddSavingWidget" android:exported="true" android:label="Add Saving">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/add_saving_widget_info" />
+        </receiver>
+
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
         <meta-data
