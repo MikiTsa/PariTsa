@@ -226,6 +226,23 @@ class FirebaseService {
     await _categoriesDoc(type)!.set({'items': reorderedList});
   }
 
+  // Get all unique tags used across all transaction types, sorted alphabetically
+  Future<List<String>> getUsedTags() async {
+    if (_currentUserId == null) return [];
+    final results = await Future.wait([
+      getTransactions(TransactionType.expense),
+      getTransactions(TransactionType.income),
+      getTransactions(TransactionType.saving),
+    ]);
+    final tags = <String>{};
+    for (final list in results) {
+      for (final t in list) {
+        if (t.tag != null && t.tag!.isNotEmpty) tags.add(t.tag!);
+      }
+    }
+    return tags.toList()..sort();
+  }
+
   // Get all transactions of a specific type (one-time fetch)
   Future<List<Transaction>> getTransactions(TransactionType type) async {
     try {

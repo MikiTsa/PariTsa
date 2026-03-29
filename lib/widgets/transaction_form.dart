@@ -30,6 +30,7 @@ class _TransactionFormState extends State<TransactionForm> {
   String? _selectedCategory;
   DateTime _selectedDate = DateTime.now();
   List<String> _categories = [];
+  List<String> _usedTags = [];
 
   bool get isEditing => widget.initialTransaction != null;
 
@@ -71,6 +72,13 @@ class _TransactionFormState extends State<TransactionForm> {
       }
     }
     _loadCategories();
+    _loadTags();
+  }
+
+  Future<void> _loadTags() async {
+    final tags = await FirebaseService().getUsedTags();
+    if (!mounted) return;
+    setState(() => _usedTags = tags);
   }
 
   Future<void> _loadCategories() async {
@@ -92,6 +100,81 @@ class _TransactionFormState extends State<TransactionForm> {
     _noteController.dispose();
     _tagController.dispose();
     super.dispose();
+  }
+
+  void _showCategorySheet(BuildContext context) {
+    final color = _typeColor;
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Theme.of(context).cardColor,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 12),
+            Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: AppColors.pearlAqua,
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  'Category',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: context.cPrimaryText,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 4),
+            ConstrainedBox(
+              constraints: BoxConstraints(
+                maxHeight: MediaQuery.of(context).size.height * 0.45,
+              ),
+              child: ListView(
+                shrinkWrap: true,
+                children: _categories.map((cat) {
+                  final selected = _selectedCategory == cat;
+                  return ListTile(
+                    contentPadding:
+                        const EdgeInsets.symmetric(horizontal: 20),
+                    title: Text(
+                      cat,
+                      style: TextStyle(
+                        color: selected ? color : context.cPrimaryText,
+                        fontWeight: selected
+                            ? FontWeight.bold
+                            : FontWeight.normal,
+                      ),
+                    ),
+                    trailing: selected
+                        ? Icon(Icons.check_rounded, color: color)
+                        : null,
+                    onTap: () {
+                      setState(() => _selectedCategory = cat);
+                      Navigator.pop(ctx);
+                    },
+                  );
+                }).toList(),
+              ),
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
   }
 
   Future<void> _selectDate(BuildContext context) async {
@@ -118,35 +201,88 @@ class _TransactionFormState extends State<TransactionForm> {
 
   void _showTagDialog() {
     final tempController = TextEditingController(text: _tagController.text);
+    final color = _typeColor;
+
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Tag (Optional)'),
-        content: TextField(
-          controller: tempController,
-          autofocus: true,
-          decoration: const InputDecoration(
-            hintText: 'e.g. Vacation 2025, Side project',
-            prefixIcon: Icon(Icons.label_outline, color: AppColors.darkCyan),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () {
-              setState(() => _tagController.text = '');
-              Navigator.pop(context);
-            },
-            child: const Text('Clear'),
-          ),
-          TextButton(
-            onPressed: () {
-              setState(() => _tagController.text = tempController.text.trim());
-              Navigator.pop(context);
-            },
-            style: TextButton.styleFrom(foregroundColor: _typeColor),
-            child: const Text('Done'),
-          ),
-        ],
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          final query = tempController.text.trim().toLowerCase();
+          final suggestions = _usedTags
+              .where((t) => query.isEmpty || t.toLowerCase().contains(query))
+              .toList();
+
+          return AlertDialog(
+            title: const Text('Tag (Optional)'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                TextField(
+                  controller: tempController,
+                  autofocus: true,
+                  onChanged: (_) => setDialogState(() {}),
+                  decoration: const InputDecoration(
+                    hintText: 'e.g. Vacation 2025, Side project',
+                    prefixIcon: Icon(
+                      Icons.label_outline,
+                      color: AppColors.darkCyan,
+                    ),
+                  ),
+                ),
+                if (suggestions.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 4,
+                    children: suggestions.map((tag) {
+                      final isSelected = tempController.text.trim() == tag;
+                      return ActionChip(
+                        label: Text(
+                          tag,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: isSelected ? Colors.white : color,
+                          ),
+                        ),
+                        backgroundColor: isSelected
+                            ? color
+                            : color.withValues(alpha: 0.12),
+                        side: BorderSide(
+                          color: color.withValues(alpha: 0.3),
+                        ),
+                        padding: const EdgeInsets.symmetric(horizontal: 4),
+                        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        onPressed: () {
+                          tempController.text = tag;
+                          setDialogState(() {});
+                        },
+                      );
+                    }).toList(),
+                  ),
+                ],
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  setState(() => _tagController.text = '');
+                  Navigator.pop(context);
+                },
+                child: const Text('Clear'),
+              ),
+              TextButton(
+                onPressed: () {
+                  setState(() =>
+                      _tagController.text = tempController.text.trim());
+                  Navigator.pop(context);
+                },
+                style: TextButton.styleFrom(foregroundColor: color),
+                child: const Text('Done'),
+              ),
+            ],
+          );
+        },
       ),
     );
   }
@@ -323,30 +459,39 @@ class _TransactionFormState extends State<TransactionForm> {
                 ),
                 const SizedBox(height: 12),
 
-                // Category dropdown
-                DropdownButtonFormField<String>(
-                  initialValue: _selectedCategory,
-                  decoration: const InputDecoration(
-                    labelText: 'Category',
-                    prefixIcon: Icon(
-                      Icons.category_outlined,
-                      color: AppColors.darkCyan,
+                // Category picker
+                InkWell(
+                  onTap: _categories.isEmpty
+                      ? null
+                      : () => _showCategorySheet(context),
+                  borderRadius: BorderRadius.circular(10),
+                  child: InputDecorator(
+                    decoration: const InputDecoration(
+                      labelText: 'Category',
+                      prefixIcon: Icon(
+                        Icons.category_outlined,
+                        color: AppColors.darkCyan,
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          _selectedCategory ?? 'Select a category',
+                          style: TextStyle(
+                            color: _selectedCategory != null
+                                ? context.cPrimaryText
+                                : context.cMutedText,
+                          ),
+                        ),
+                        Icon(
+                          Icons.keyboard_arrow_down_rounded,
+                          color: context.cMutedText,
+                          size: 20,
+                        ),
+                      ],
                     ),
                   ),
-                  dropdownColor: context.cCard,
-                  items:
-                      _categories.map((category) {
-                        return DropdownMenuItem(
-                          value: category,
-                          child: Text(
-                            category,
-                            style: TextStyle(color: context.cPrimaryText),
-                          ),
-                        );
-                      }).toList(),
-                  onChanged: (value) {
-                    setState(() => _selectedCategory = value);
-                  },
                 ),
                 const SizedBox(height: 12),
 

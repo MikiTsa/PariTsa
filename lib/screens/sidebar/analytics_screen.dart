@@ -10,6 +10,13 @@ import 'package:expenses_tracker/theme/theme_extensions.dart';
 
 enum _Period { thisMonth, last3Months, thisYear, allTime }
 
+const _kPeriodLabels = {
+  _Period.thisMonth:   'This Month',
+  _Period.last3Months: 'Last 3 Months',
+  _Period.thisYear:    'This Year',
+  _Period.allTime:     'All Time',
+};
+
 class AnalyticsScreen extends StatefulWidget {
   const AnalyticsScreen({super.key});
 
@@ -124,6 +131,7 @@ class _AnalyticsTabState extends State<_AnalyticsTab>
 
   List<Transaction> _all = [];
   _Period _period = _Period.thisMonth;
+  String? _selectedTag;
   bool _loading = true;
 
   @override
@@ -153,6 +161,14 @@ class _AnalyticsTabState extends State<_AnalyticsTab>
 
   // ── Filtering ─────────────────────────────────────────────────────────────
 
+  List<String> get _availableTags {
+    final tags = <String>{};
+    for (final t in _all) {
+      if (t.tag != null && t.tag!.isNotEmpty) tags.add(t.tag!);
+    }
+    return tags.toList()..sort();
+  }
+
   List<Transaction> get _filtered {
     final now = DateTime.now();
     DateTime? cutoff;
@@ -166,8 +182,13 @@ class _AnalyticsTabState extends State<_AnalyticsTab>
       case _Period.allTime:
         cutoff = null;
     }
-    if (cutoff == null) return _all;
-    return _all.where((t) => !t.date.isBefore(cutoff!)).toList();
+    var result = cutoff == null
+        ? _all
+        : _all.where((t) => !t.date.isBefore(cutoff!)).toList();
+    if (_selectedTag != null) {
+      result = result.where((t) => t.tag == _selectedTag).toList();
+    }
+    return result;
   }
 
   // ── Aggregations ──────────────────────────────────────────────────────────
@@ -201,6 +222,167 @@ class _AnalyticsTabState extends State<_AnalyticsTab>
         TransactionType.saving  => AppColors.saving,
       };
 
+  // ── Bottom sheet pickers ──────────────────────────────────────────────────
+
+  void _showPeriodSheet(BuildContext context) {
+    final color = _accentColor;
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: context.cCard,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 12),
+            Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: AppColors.pearlAqua,
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  'Time Period',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: context.cPrimaryText,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 4),
+            ..._kPeriodLabels.entries.map((e) {
+              final selected = _period == e.key;
+              return ListTile(
+                contentPadding: const EdgeInsets.symmetric(horizontal: 20),
+                title: Text(
+                  e.value,
+                  style: TextStyle(
+                    color: selected ? color : context.cPrimaryText,
+                    fontWeight:
+                        selected ? FontWeight.bold : FontWeight.normal,
+                  ),
+                ),
+                trailing: selected
+                    ? Icon(Icons.check_rounded, color: color)
+                    : null,
+                onTap: () {
+                  setState(() => _period = e.key);
+                  Navigator.pop(ctx);
+                },
+              );
+            }),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showTagSheet(BuildContext context, List<String> tags) {
+    final color = _accentColor;
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: context.cCard,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 12),
+            Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: AppColors.pearlAqua,
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  'Filter by Tag',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: context.cPrimaryText,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 4),
+            ListTile(
+              contentPadding: const EdgeInsets.symmetric(horizontal: 20),
+              leading: Icon(
+                Icons.label_off_outlined,
+                color: _selectedTag == null ? color : context.cMutedText,
+                size: 20,
+              ),
+              title: Text(
+                'All Tags',
+                style: TextStyle(
+                  color: _selectedTag == null ? color : context.cPrimaryText,
+                  fontWeight: _selectedTag == null
+                      ? FontWeight.bold
+                      : FontWeight.normal,
+                ),
+              ),
+              trailing: _selectedTag == null
+                  ? Icon(Icons.check_rounded, color: color)
+                  : null,
+              onTap: () {
+                setState(() => _selectedTag = null);
+                Navigator.pop(ctx);
+              },
+            ),
+            ...tags.map((tag) {
+              final selected = _selectedTag == tag;
+              return ListTile(
+                contentPadding: const EdgeInsets.symmetric(horizontal: 20),
+                leading: Icon(
+                  Icons.label_outline,
+                  color: selected ? color : context.cMutedText,
+                  size: 20,
+                ),
+                title: Text(
+                  tag,
+                  style: TextStyle(
+                    color: selected ? color : context.cPrimaryText,
+                    fontWeight:
+                        selected ? FontWeight.bold : FontWeight.normal,
+                  ),
+                ),
+                trailing: selected
+                    ? Icon(Icons.check_rounded, color: color)
+                    : null,
+                onTap: () {
+                  setState(() => _selectedTag = tag);
+                  Navigator.pop(ctx);
+                },
+              );
+            }),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+  }
+
   // ── Build ─────────────────────────────────────────────────────────────────
 
   @override
@@ -213,22 +395,45 @@ class _AnalyticsTabState extends State<_AnalyticsTab>
       );
     }
 
-    final settings    = AppSettingsScope.of(context);
-    final filtered    = _filtered;
-    final total       = filtered.fold(0.0, (s, t) => s + t.amount);
-    final count       = filtered.length;
-    final avg         = count > 0 ? total / count : 0.0;
-    final categories  = _categoryBreakdown;
-    final monthly     = _monthlyTotals;
-    final color       = _accentColor;
+    final settings   = AppSettingsScope.of(context);
+    final tags       = _availableTags;
+    final filtered   = _filtered;
+    final total      = filtered.fold(0.0, (s, t) => s + t.amount);
+    final count      = filtered.length;
+    final avg        = count > 0 ? total / count : 0.0;
+    final categories = _categoryBreakdown;
+    final monthly    = _monthlyTotals;
+    final color      = _accentColor;
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildPeriodFilter(context),
+          // ── Filter pills row ──────────────────────────────────────────────
+          Row(
+            children: [
+              _FilterPill(
+                icon: Icons.calendar_today_outlined,
+                label: _kPeriodLabels[_period]!,
+                isActive: _period != _Period.thisMonth,
+                color: color,
+                onTap: () => _showPeriodSheet(context),
+              ),
+              if (tags.isNotEmpty) ...[
+                const SizedBox(width: 8),
+                _FilterPill(
+                  icon: Icons.label_outline,
+                  label: _selectedTag ?? 'All Tags',
+                  isActive: _selectedTag != null,
+                  color: color,
+                  onTap: () => _showTagSheet(context, tags),
+                ),
+              ],
+            ],
+          ),
           const SizedBox(height: 16),
+
           _buildSummaryRow(context, settings, total, count, avg, color),
           const SizedBox(height: 24),
 
@@ -265,45 +470,6 @@ class _AnalyticsTabState extends State<_AnalyticsTab>
             ),
           ],
         ),
-      ),
-    );
-  }
-
-  Widget _buildPeriodFilter(BuildContext context) {
-    const labels = {
-      _Period.thisMonth:   'This Month',
-      _Period.last3Months: 'Last 3 Months',
-      _Period.thisYear:    'This Year',
-      _Period.allTime:     'All Time',
-    };
-    final color = _accentColor;
-
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: Row(
-        children: labels.entries.map((e) {
-          final selected = _period == e.key;
-          return Padding(
-            padding: const EdgeInsets.only(right: 8),
-            child: FilterChip(
-              label: Text(e.value),
-              selected: selected,
-              showCheckmark: false,
-              onSelected: (_) => setState(() => _period = e.key),
-              selectedColor: color.withValues(alpha: 0.15),
-              checkmarkColor: color,
-              backgroundColor: context.cInputFill,
-              side: BorderSide(
-                color: selected ? color : Colors.transparent,
-              ),
-              labelStyle: TextStyle(
-                color: selected ? color : context.cMutedText,
-                fontWeight: selected ? FontWeight.bold : FontWeight.normal,
-                fontSize: 13,
-              ),
-            ),
-          );
-        }).toList(),
       ),
     );
   }
@@ -533,6 +699,66 @@ class _AnalyticsTabState extends State<_AnalyticsTab>
               );
             }).toList(),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Filter pill button ────────────────────────────────────────────────────────
+
+class _FilterPill extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final bool isActive;
+  final Color color;
+  final VoidCallback onTap;
+
+  const _FilterPill({
+    required this.icon,
+    required this.label,
+    required this.isActive,
+    required this.color,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final pillColor = isActive ? color : context.cMutedText;
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(20),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: isActive
+              ? color.withValues(alpha: 0.10)
+              : context.cInputFill,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: isActive
+                ? color.withValues(alpha: 0.6)
+                : context.cMutedText.withValues(alpha: 0.25),
+            width: isActive ? 1.5 : 1,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 14, color: pillColor),
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight:
+                    isActive ? FontWeight.bold : FontWeight.normal,
+                color: pillColor,
+              ),
+            ),
+            const SizedBox(width: 2),
+            Icon(Icons.keyboard_arrow_down_rounded, size: 16, color: pillColor),
+          ],
         ),
       ),
     );
