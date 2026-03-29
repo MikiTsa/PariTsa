@@ -24,7 +24,7 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen>
-    with SingleTickerProviderStateMixin {
+    with SingleTickerProviderStateMixin, WidgetsBindingObserver {
   static const _widgetChannel = MethodChannel('com.example.expenses_tracker/widget');
 
   final _scaffoldKey = GlobalKey<ScaffoldState>();
@@ -35,13 +35,14 @@ class _HomeScreenState extends State<HomeScreen>
   final List<StreamSubscription<dynamic>> _subscriptions = [];
   bool _initialized = false;
 
-  List<Transaction> expenses = [];
-  List<Transaction> incomes = [];
-  List<Transaction> savings = [];
+  List<Transaction>? expenses;
+  List<Transaction>? incomes;
+  List<Transaction>? savings;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _setupFirebaseListeners();
   }
 
@@ -58,22 +59,25 @@ class _HomeScreenState extends State<HomeScreen>
       );
       // No listener needed — AnimatedBuilder on tabCtrl.animation handles BalanceBox redraws.
 
-      // Listen for widget taps while the app is already running (onNewIntent path).
-      _widgetChannel.setMethodCallHandler((call) async {
-        if (call.method == 'openTransaction') {
-          _openTransactionForm(call.arguments as String? ?? '');
-        }
-      });
-
-      // Check if the app was cold-launched from a widget.
-      WidgetsBinding.instance.addPostFrameCallback((_) async {
-        try {
-          final action =
-              await _widgetChannel.invokeMethod<String?>('checkLaunchAction');
-          if (action != null && mounted) _openTransactionForm(action);
-        } catch (_) {}
-      });
+      // Cold-launch path: app was started by tapping a widget.
+      WidgetsBinding.instance.addPostFrameCallback((_) => _checkWidgetAction());
     }
+  }
+
+  Future<void> _checkWidgetAction() async {
+    try {
+      final action = await _widgetChannel.invokeMethod<String?>('checkLaunchAction');
+      if (action != null && mounted) _openTransactionForm(action);
+    } catch (e) {
+      debugPrint('Widget checkLaunchAction failed: $e');
+    }
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Warm-resume path: Kotlin stores the action in pendingWidgetAction before
+    // onResume fires, so checkLaunchAction always finds it here.
+    if (state == AppLifecycleState.resumed) _checkWidgetAction();
   }
 
   void _openTransactionForm(String action) {
@@ -97,18 +101,16 @@ class _HomeScreenState extends State<HomeScreen>
         type = TransactionType.expense;
     }
     _tabController?.animateTo(tabIndex);
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      showModalBottomSheet(
-        context: context,
-        isScrollControlled: true,
-        backgroundColor: Colors.transparent,
-        builder: (_) => TransactionForm(
-          transactionType: type,
-          onSave: (t) => addTransaction(t, type),
-        ),
-      );
-    });
+    if (!mounted) return;
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => TransactionForm(
+        transactionType: type,
+        onSave: (t) => addTransaction(t, type),
+      ),
+    );
   }
 
   void _setupFirebaseListeners() {
@@ -139,6 +141,7 @@ class _HomeScreenState extends State<HomeScreen>
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     for (final sub in _subscriptions) {
       sub.cancel();
     }
@@ -147,14 +150,14 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   double get currentBalance {
-    double income  = incomes.fold(0, (sum, item) => sum + item.amount);
-    double expense = expenses.fold(0, (sum, item) => sum + item.amount);
-    double saving  = savings.fold(0, (sum, item) => sum + item.amount);
+    double income  = (incomes  ?? []).fold(0, (sum, item) => sum + item.amount);
+    double expense = (expenses ?? []).fold(0, (sum, item) => sum + item.amount);
+    double saving  = (savings  ?? []).fold(0, (sum, item) => sum + item.amount);
     return income - expense - saving;
   }
 
   double get totalSavings {
-    return savings.fold(0, (sum, item) => sum + item.amount);
+    return (savings ?? []).fold(0, (sum, item) => sum + item.amount);
   }
 
   Color _interpolateTabColor(double value) {
@@ -427,6 +430,7 @@ class _HomeScreenState extends State<HomeScreen>
                             editTransaction(t, TransactionType.saving),
                         onRemoveTransaction: removeTransaction,
                       ),
+
                     ],
                   ),
                 ),

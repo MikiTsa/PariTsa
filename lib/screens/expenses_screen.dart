@@ -5,7 +5,7 @@ import 'package:expenses_tracker/widgets/transaction_list.dart';
 import 'package:expenses_tracker/theme/app_colors.dart';
 
 class ExpensesScreen extends StatelessWidget {
-  final List<Transaction> expenses;
+  final List<Transaction>? expenses;
   final Function(Transaction) onAddExpense;
   final Function(Transaction) onEditExpense;
   final Function(String, TransactionType) onRemoveTransaction;
@@ -22,10 +22,12 @@ class ExpensesScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       body:
-          expenses.isEmpty
+          expenses == null
+              ? const Center(child: CircularProgressIndicator())
+              : expenses!.isEmpty
               ? _buildEmptyState()
               : TransactionList(
-                transactions: expenses,
+                transactions: expenses!,
                 transactionType: TransactionType.expense,
                 onRemoveTransaction: onRemoveTransaction,
                 onEditTransaction:
