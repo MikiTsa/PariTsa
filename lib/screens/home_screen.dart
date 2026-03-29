@@ -77,6 +77,12 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   void _openTransactionForm(String action) {
+    // Wallet notification tap: just show the expenses tab, no form.
+    if (action == 'open_expenses') {
+      _tabController?.animateTo(0);
+      return;
+    }
+
     final int tabIndex;
     final TransactionType type;
     switch (action) {

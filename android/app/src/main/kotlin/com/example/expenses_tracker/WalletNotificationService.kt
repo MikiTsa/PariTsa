@@ -2,6 +2,8 @@ package com.example.expenses_tracker
 
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.app.PendingIntent
+import android.content.Intent
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import android.util.Log
@@ -22,6 +24,12 @@ import java.util.regex.Pattern
  * stream subscription the next time the app is opened.
  */
 class WalletNotificationService : NotificationListenerService() {
+
+    // Tracks recently-processed notification keys to prevent duplicate Firestore writes.
+    // Google Wallet sometimes fires onNotificationPosted twice for a single payment
+    // (e.g. initial post + bigText update). Keys are evicted after DEDUP_WINDOW_MS.
+    private val recentKeys = mutableMapOf<String, Long>()
+    private val DEDUP_WINDOW_MS = 15_000L // 15 seconds
 
     companion object {
         private const val TAG              = "WalletNotifService"
@@ -61,6 +69,17 @@ class WalletNotificationService : NotificationListenerService() {
     override fun onNotificationPosted(sbn: StatusBarNotification?) {
         sbn ?: return
         if (sbn.packageName !in WALLET_PACKAGES) return
+
+        // Deduplicate: skip if we already processed this exact notification recently.
+        val now = System.currentTimeMillis()
+        val lastSeen = recentKeys[sbn.key]
+        if (lastSeen != null && now - lastSeen < DEDUP_WINDOW_MS) {
+            Log.d(TAG, "Duplicate notification ignored: ${sbn.key}")
+            return
+        }
+        recentKeys[sbn.key] = now
+        // Prune stale entries to avoid unbounded growth.
+        recentKeys.entries.removeAll { now - it.value >= DEDUP_WINDOW_MS }
 
         val extras  = sbn.notification?.extras ?: return
         val title   = extras.getString("android.title") ?: ""
@@ -132,6 +151,16 @@ class WalletNotificationService : NotificationListenerService() {
         }
         manager.createNotificationChannel(channel)
 
+        // Tapping the notification opens the app on the Expenses tab.
+        val openIntent = Intent(this, MainActivity::class.java).apply {
+            putExtra(AddTransactionWidget.EXTRA_ACTION, "open_expenses")
+            flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
+        }
+        val pendingIntent = PendingIntent.getActivity(
+            this, 0, openIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+
         val amountStr = String.format("%.2f", amount)
         val notification = NotificationCompat.Builder(this, NOTIF_CHANNEL_ID)
             .setSmallIcon(R.mipmap.ic_launcher)
@@ -139,6 +168,7 @@ class WalletNotificationService : NotificationListenerService() {
             .setContentText("$merchant — €$amountStr  ·  $category")
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
             .setAutoCancel(true)
+            .setContentIntent(pendingIntent)
             .build()
 
         manager.notify(System.currentTimeMillis().toInt(), notification)
