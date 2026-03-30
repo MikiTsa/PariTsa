@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:expenses_tracker/providers/app_settings.dart';
+import 'package:expenses_tracker/services/biometric_service.dart';
 import 'package:expenses_tracker/services/wallet_notification_service.dart';
 import 'package:expenses_tracker/theme/app_colors.dart';
 import 'package:expenses_tracker/theme/theme_extensions.dart';
@@ -52,6 +53,14 @@ const _kDateFormats = [
   _DateFmt('yyyy-MM-dd', '2026-03-26',   'ISO 8601'),
 ];
 
+// ─── Tab catalogue ─────────────────────────────────────────────────────────────
+
+const _kTabs = [
+  (0, AppColors.expense, 'Expenses'),
+  (1, AppColors.income,  'Incomes'),
+  (2, AppColors.saving,  'Savings'),
+];
+
 // ─── Screen ────────────────────────────────────────────────────────────────────
 
 class SettingsScreen extends StatelessWidget {
@@ -76,87 +85,101 @@ class SettingsScreen extends StatelessWidget {
         ),
       ),
       body: ListView(
+        padding: const EdgeInsets.symmetric(vertical: 20),
         children: [
           // ── Appearance ────────────────────────────────────────────────────
-          _SectionHeader('Appearance'),
-
-          // Theme
-          _SettingsTile(
-            icon: Icons.palette_outlined,
-            title: 'Theme',
-            child: _ThemePicker(
-              current: settings.themeMode,
-              onChanged: settings.setThemeMode,
-            ),
-          ),
-
-          // Currency
-          _SettingsTile(
-            icon: Icons.currency_exchange,
-            title: 'Currency',
-            trailing: GestureDetector(
-              onTap: () => _showCurrencyPicker(context, settings),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    '${settings.currencySymbol}  ${settings.currency}',
-                    style: TextStyle(
-                      color: AppColors.primary,
-                      fontWeight: FontWeight.w600,
-                      fontSize: 14,
-                    ),
-                  ),
-                  const SizedBox(width: 4),
-                  Icon(
-                    Icons.chevron_right,
-                    color: context.cMutedText,
-                    size: 20,
-                  ),
-                ],
+          _SectionLabel('Appearance'),
+          const SizedBox(height: 8),
+          _SettingsCard(
+            children: [
+              // Theme
+              _SettingsRow(
+                icon: Icons.palette_outlined,
+                title: 'Theme',
+                trailingText: _themeLabel(settings.themeMode),
+                onTap: () => _showThemePicker(context, settings),
               ),
-            ),
-            onTap: () => _showCurrencyPicker(context, settings),
-          ),
-
-          const SizedBox(height: 8),
-
-          // ── General ───────────────────────────────────────────────────────
-          _SectionHeader('General'),
-
-          // Date format
-          _SettingsTile(
-            icon: Icons.calendar_today_outlined,
-            title: 'Date format',
-            child: _DateFormatPicker(
-              current: settings.dateFormat,
-              onChanged: settings.setDateFormat,
-            ),
-          ),
-
-          // Default tab
-          _SettingsTile(
-            icon: Icons.tab_outlined,
-            title: 'Default tab',
-            child: _TabPicker(
-              current: settings.defaultTab,
-              onChanged: settings.setDefaultTab,
-            ),
-          ),
-
-          const SizedBox(height: 8),
-
-          // ── Integrations ──────────────────────────────────────────────────
-          _SectionHeader('Integrations'),
-
-          _SettingsTile(
-            icon: Icons.wallet,
-            title: 'Google Wallet',
-            child: const _WalletPermissionTile(),
+              // Currency
+              _SettingsRow(
+                icon: Icons.currency_exchange,
+                title: 'Currency',
+                trailingText: '${settings.currencySymbol}  ${settings.currency}',
+                onTap: () => _showCurrencyPicker(context, settings),
+              ),
+            ],
           ),
 
           const SizedBox(height: 24),
+
+          // ── General ───────────────────────────────────────────────────────
+          _SectionLabel('General'),
+          const SizedBox(height: 8),
+          _SettingsCard(
+            children: [
+              // Date format
+              _SettingsRow(
+                icon: Icons.calendar_today_outlined,
+                title: 'Date format',
+                trailingText: _kDateFormats
+                    .firstWhere((f) => f.key == settings.dateFormat,
+                        orElse: () => _kDateFormats.first)
+                    .label,
+                onTap: () => _showDateFormatPicker(context, settings),
+              ),
+              // Default tab
+              _SettingsRow(
+                icon: Icons.tab_outlined,
+                title: 'Default tab',
+                trailingWidget: _TabBadge(tab: settings.defaultTab),
+                onTap: () => _showTabPicker(context, settings),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 24),
+
+          // ── Security ──────────────────────────────────────────────────────
+          _SectionLabel('Security'),
+          const SizedBox(height: 8),
+          _SettingsCard(
+            children: [
+              const _BiometricRow(),
+            ],
+          ),
+
+          const SizedBox(height: 24),
+
+          // ── Integrations ──────────────────────────────────────────────────
+          _SectionLabel('Integrations'),
+          const SizedBox(height: 8),
+          _SettingsCard(
+            children: [
+              const _WalletRow(),
+            ],
+          ),
+
+          const SizedBox(height: 32),
         ],
+      ),
+    );
+  }
+
+  static String _themeLabel(ThemeMode mode) => switch (mode) {
+        ThemeMode.system => 'System',
+        ThemeMode.light  => 'Light',
+        ThemeMode.dark   => 'Dark',
+      };
+
+  void _showThemePicker(BuildContext context, AppSettings settings) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (sheetCtx) => _ThemePickerSheet(
+        current: settings.themeMode,
+        onSelected: (mode) {
+          settings.setThemeMode(mode);
+          Navigator.pop(sheetCtx);
+        },
       ),
     );
   }
@@ -175,24 +198,52 @@ class SettingsScreen extends StatelessWidget {
       ),
     );
   }
+
+  void _showDateFormatPicker(BuildContext context, AppSettings settings) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (sheetCtx) => _DateFormatSheet(
+        current: settings.dateFormat,
+        onSelected: (key) {
+          settings.setDateFormat(key);
+          Navigator.pop(sheetCtx);
+        },
+      ),
+    );
+  }
+
+  void _showTabPicker(BuildContext context, AppSettings settings) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (sheetCtx) => _TabPickerSheet(
+        current: settings.defaultTab,
+        onSelected: (val) {
+          settings.setDefaultTab(val);
+          Navigator.pop(sheetCtx);
+        },
+      ),
+    );
+  }
 }
 
-// ─── Section header ────────────────────────────────────────────────────────────
+// ─── Section label ─────────────────────────────────────────────────────────────
 
-class _SectionHeader extends StatelessWidget {
+class _SectionLabel extends StatelessWidget {
   final String title;
-  const _SectionHeader(this.title);
+  const _SectionLabel(this.title);
 
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 20, 16, 6),
+      padding: const EdgeInsets.fromLTRB(20, 0, 16, 0),
       child: Text(
         title.toUpperCase(),
         style: TextStyle(
           fontSize: 11,
           fontWeight: FontWeight.bold,
-          letterSpacing: 1.0,
+          letterSpacing: 1.2,
           color: context.cMutedText,
         ),
       ),
@@ -200,20 +251,65 @@ class _SectionHeader extends StatelessWidget {
   }
 }
 
-// ─── Generic settings tile ─────────────────────────────────────────────────────
+// ─── Settings card ─────────────────────────────────────────────────────────────
 
-class _SettingsTile extends StatelessWidget {
+class _SettingsCard extends StatelessWidget {
+  final List<Widget> children;
+  const _SettingsCard({required this.children});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16),
+      decoration: BoxDecoration(
+        color: context.cCard,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: context.cDivider.withValues(alpha: 0.6),
+          width: 0.5,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: context.cPrimaryText.withValues(alpha: 0.04),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(16),
+        child: Column(
+          children: [
+            for (int i = 0; i < children.length; i++) ...[
+              children[i],
+              if (i < children.length - 1)
+                Divider(
+                  height: 1,
+                  indent: 54,
+                  color: context.cDivider.withValues(alpha: 0.5),
+                ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Settings row ──────────────────────────────────────────────────────────────
+
+class _SettingsRow extends StatelessWidget {
   final IconData icon;
   final String title;
-  final Widget? child;
-  final Widget? trailing;
+  final String? trailingText;
+  final Widget? trailingWidget;
   final VoidCallback? onTap;
 
-  const _SettingsTile({
+  const _SettingsRow({
     required this.icon,
     required this.title,
-    this.child,
-    this.trailing,
+    this.trailingText,
+    this.trailingWidget,
     this.onTap,
   });
 
@@ -226,30 +322,47 @@ class _SettingsTile extends StatelessWidget {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            Icon(icon, color: AppColors.primary, size: 22),
+            // Icon badge
+            Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                color: AppColors.primary.withValues(alpha: 0.10),
+                borderRadius: BorderRadius.circular(9),
+              ),
+              child: Icon(icon, color: AppColors.primary, size: 20),
+            ),
             const SizedBox(width: 14),
             Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: TextStyle(
-                      fontSize: 15,
-                      color: context.cPrimaryText,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                  if (child != null) ...[
-                    const SizedBox(height: 10),
-                    child!,
-                  ],
-                ],
+              child: Text(
+                title,
+                style: TextStyle(
+                  fontSize: 15,
+                  color: context.cPrimaryText,
+                  fontWeight: FontWeight.w500,
+                ),
               ),
             ),
-            if (trailing != null) ...[
+            // Trailing
+            if (trailingText != null) ...[
               const SizedBox(width: 8),
-              trailing!,
+              Text(
+                trailingText!,
+                style: TextStyle(
+                  color: AppColors.primary,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 14,
+                ),
+              ),
+              const SizedBox(width: 2),
+              Icon(Icons.chevron_right, color: context.cMutedText, size: 20),
+            ] else if (trailingWidget != null) ...[
+              const SizedBox(width: 8),
+              trailingWidget!,
+              const SizedBox(width: 2),
+              Icon(Icons.chevron_right, color: context.cMutedText, size: 20),
+            ] else if (onTap != null) ...[
+              Icon(Icons.chevron_right, color: context.cMutedText, size: 20),
             ],
           ],
         ),
@@ -258,138 +371,213 @@ class _SettingsTile extends StatelessWidget {
   }
 }
 
-// ─── Theme picker ──────────────────────────────────────────────────────────────
+// ─── Tab badge ─────────────────────────────────────────────────────────────────
 
-class _ThemePicker extends StatelessWidget {
-  final ThemeMode current;
-  final ValueChanged<ThemeMode> onChanged;
-  const _ThemePicker({required this.current, required this.onChanged});
+class _TabBadge extends StatelessWidget {
+  final int tab;
+  const _TabBadge({required this.tab});
 
   @override
   Widget build(BuildContext context) {
-    return SegmentedButton<ThemeMode>(
-      segments: const [
-        ButtonSegment(
-          value: ThemeMode.system,
-          icon: Icon(Icons.brightness_auto, size: 18),
-          label: Text('System'),
+    final t = _kTabs[tab];
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 8,
+          height: 8,
+          decoration: BoxDecoration(color: t.$2, shape: BoxShape.circle),
         ),
-        ButtonSegment(
-          value: ThemeMode.light,
-          icon: Icon(Icons.light_mode, size: 18),
-          label: Text('Light'),
-        ),
-        ButtonSegment(
-          value: ThemeMode.dark,
-          icon: Icon(Icons.dark_mode, size: 18),
-          label: Text('Dark'),
+        const SizedBox(width: 6),
+        Text(
+          t.$3,
+          style: TextStyle(
+            color: t.$2,
+            fontWeight: FontWeight.w600,
+            fontSize: 14,
+          ),
         ),
       ],
-      selected: {current},
-      onSelectionChanged: (sel) => onChanged(sel.first),
-      style: ButtonStyle(
-        visualDensity: VisualDensity.compact,
-        textStyle: WidgetStateProperty.all(
-          const TextStyle(fontSize: 12),
-        ),
+    );
+  }
+}
+
+// ─── Theme picker bottom sheet ─────────────────────────────────────────────────
+
+const _kThemeModes = [
+  (ThemeMode.system, Icons.brightness_auto, 'System'),
+  (ThemeMode.light,  Icons.light_mode,      'Light'),
+  (ThemeMode.dark,   Icons.dark_mode,       'Dark'),
+];
+
+class _ThemePickerSheet extends StatelessWidget {
+  final ThemeMode current;
+  final ValueChanged<ThemeMode> onSelected;
+  const _ThemePickerSheet({required this.current, required this.onSelected});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: context.cCard,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _SheetHandle(),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 4, 20, 12),
+            child: Text(
+              'Theme',
+              style: TextStyle(
+                fontSize: 17,
+                fontWeight: FontWeight.bold,
+                color: context.cPrimaryText,
+              ),
+            ),
+          ),
+          Divider(height: 1, color: context.cDivider),
+          ..._kThemeModes.map((t) {
+            final selected = t.$1 == current;
+            return ListTile(
+              leading: Icon(t.$2,
+                  color: selected ? AppColors.primary : context.cMutedText),
+              title: Text(
+                t.$3,
+                style: TextStyle(
+                  color: context.cPrimaryText,
+                  fontWeight:
+                      selected ? FontWeight.bold : FontWeight.normal,
+                ),
+              ),
+              trailing: selected
+                  ? Icon(Icons.check_circle, color: AppColors.primary)
+                  : null,
+              onTap: () => onSelected(t.$1),
+            );
+          }),
+          const SizedBox(height: 16),
+        ],
       ),
     );
   }
 }
 
-// ─── Date-format picker ────────────────────────────────────────────────────────
+// ─── Date format bottom sheet ──────────────────────────────────────────────────
 
-class _DateFormatPicker extends StatelessWidget {
+class _DateFormatSheet extends StatelessWidget {
   final String current;
-  final ValueChanged<String> onChanged;
-  const _DateFormatPicker({required this.current, required this.onChanged});
+  final ValueChanged<String> onSelected;
+  const _DateFormatSheet({required this.current, required this.onSelected});
 
   @override
   Widget build(BuildContext context) {
-    return Wrap(
-      spacing: 8,
-      runSpacing: 6,
-      children: _kDateFormats.map((fmt) {
-        final selected = current == fmt.key;
-        return ChoiceChip(
-          label: Text(fmt.label),
-          selected: selected,
-          showCheckmark: false,
-          onSelected: (_) => onChanged(fmt.key),
-          selectedColor: AppColors.primary.withValues(alpha: 0.15),
-          side: BorderSide(
-            color: selected ? AppColors.primary : context.cDivider,
+    return Container(
+      decoration: BoxDecoration(
+        color: context.cCard,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _SheetHandle(),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 4, 20, 12),
+            child: Text(
+              'Date Format',
+              style: TextStyle(
+                fontSize: 17,
+                fontWeight: FontWeight.bold,
+                color: context.cPrimaryText,
+              ),
+            ),
           ),
-          backgroundColor: context.cInputFill,
-          labelStyle: TextStyle(
-            fontSize: 12,
-            color: selected ? AppColors.primary : context.cMutedText,
-            fontWeight: selected ? FontWeight.bold : FontWeight.normal,
-          ),
-        );
-      }).toList(),
+          Divider(height: 1, color: context.cDivider),
+          ..._kDateFormats.map((fmt) {
+            final selected = fmt.key == current;
+            return ListTile(
+              title: Text(
+                fmt.label,
+                style: TextStyle(
+                  color: context.cPrimaryText,
+                  fontWeight:
+                      selected ? FontWeight.bold : FontWeight.normal,
+                ),
+              ),
+              subtitle: Text(
+                fmt.example,
+                style: TextStyle(color: context.cMutedText, fontSize: 12),
+              ),
+              trailing: selected
+                  ? Icon(Icons.check_circle, color: AppColors.primary)
+                  : null,
+              onTap: () => onSelected(fmt.key),
+            );
+          }),
+          const SizedBox(height: 16),
+        ],
+      ),
     );
   }
 }
 
-// ─── Default tab picker ────────────────────────────────────────────────────────
+// ─── Tab picker bottom sheet ───────────────────────────────────────────────────
 
-class _TabPicker extends StatelessWidget {
+class _TabPickerSheet extends StatelessWidget {
   final int current;
-  final ValueChanged<int> onChanged;
-  const _TabPicker({required this.current, required this.onChanged});
-
-  static const _tabs = [
-    (0, AppColors.expense, 'Expenses'),
-    (1, AppColors.income,  'Incomes'),
-    (2, AppColors.saving,  'Savings'),
-  ];
+  final ValueChanged<int> onSelected;
+  const _TabPickerSheet({required this.current, required this.onSelected});
 
   @override
   Widget build(BuildContext context) {
-    final selected = _tabs[current];
-
-    return DropdownButtonHideUnderline(
-      child: DropdownButton<int>(
-        value: current,
-        isDense: true,
-        borderRadius: BorderRadius.circular(10),
-        dropdownColor: context.cCard,
-        icon: Icon(Icons.expand_more, color: context.cMutedText, size: 20),
-        selectedItemBuilder: (_) => _tabs.map((t) => Center(
-          child: Text(
-            t.$3,
-            style: TextStyle(
-              color: selected.$2,
-              fontWeight: FontWeight.w600,
-              fontSize: 14,
+    return Container(
+      decoration: BoxDecoration(
+        color: context.cCard,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _SheetHandle(),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 4, 20, 12),
+            child: Text(
+              'Default Tab',
+              style: TextStyle(
+                fontSize: 17,
+                fontWeight: FontWeight.bold,
+                color: context.cPrimaryText,
+              ),
             ),
           ),
-        )).toList(),
-        items: _tabs.map((t) => DropdownMenuItem<int>(
-          value: t.$1,
-          child: Row(
-            children: [
-              Container(
-                width: 10,
-                height: 10,
-                decoration: BoxDecoration(
-                  color: t.$2,
-                  shape: BoxShape.circle,
-                ),
+          Divider(height: 1, color: context.cDivider),
+          ..._kTabs.map((t) {
+            final selected = t.$1 == current;
+            return ListTile(
+              leading: Container(
+                width: 12,
+                height: 12,
+                margin: const EdgeInsets.only(left: 4),
+                decoration:
+                    BoxDecoration(color: t.$2, shape: BoxShape.circle),
               ),
-              const SizedBox(width: 10),
-              Text(
+              title: Text(
                 t.$3,
                 style: TextStyle(
                   color: context.cPrimaryText,
-                  fontSize: 14,
+                  fontWeight:
+                      selected ? FontWeight.bold : FontWeight.normal,
                 ),
               ),
-            ],
-          ),
-        )).toList(),
-        onChanged: (val) { if (val != null) onChanged(val); },
+              trailing: selected
+                  ? Icon(Icons.check_circle, color: t.$2)
+                  : null,
+              onTap: () => onSelected(t.$1),
+            );
+          }),
+          const SizedBox(height: 16),
+        ],
       ),
     );
   }
@@ -415,20 +603,9 @@ class _CurrencyPicker extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // Handle
+          _SheetHandle(),
           Padding(
-            padding: const EdgeInsets.only(top: 12, bottom: 4),
-            child: Container(
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                color: context.cMutedText.withValues(alpha: 0.5),
-                borderRadius: BorderRadius.circular(10),
-              ),
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 8, 20, 12),
+            padding: const EdgeInsets.fromLTRB(20, 4, 20, 12),
             child: Text(
               'Select Currency',
               style: TextStyle(
@@ -471,12 +648,14 @@ class _CurrencyPicker extends StatelessWidget {
                     c.name,
                     style: TextStyle(
                       color: context.cPrimaryText,
-                      fontWeight: selected ? FontWeight.bold : FontWeight.normal,
+                      fontWeight:
+                          selected ? FontWeight.bold : FontWeight.normal,
                     ),
                   ),
                   subtitle: Text(
                     c.code,
-                    style: TextStyle(color: context.cMutedText, fontSize: 12),
+                    style:
+                        TextStyle(color: context.cMutedText, fontSize: 12),
                   ),
                   trailing: selected
                       ? Icon(Icons.check_circle, color: AppColors.primary)
@@ -493,17 +672,107 @@ class _CurrencyPicker extends StatelessWidget {
   }
 }
 
-// ─── Google Wallet permission tile ─────────────────────────────────────────────
+// ─── Biometric lock row ────────────────────────────────────────────────────────
 
-class _WalletPermissionTile extends StatefulWidget {
-  const _WalletPermissionTile();
+class _BiometricRow extends StatefulWidget {
+  const _BiometricRow();
 
   @override
-  State<_WalletPermissionTile> createState() => _WalletPermissionTileState();
+  State<_BiometricRow> createState() => _BiometricRowState();
 }
 
-class _WalletPermissionTileState extends State<_WalletPermissionTile>
-    with WidgetsBindingObserver {
+class _BiometricRowState extends State<_BiometricRow> {
+  bool _available = false;
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    BiometricService.isAvailable().then((v) {
+      if (mounted) setState(() { _available = v; _loading = false; });
+    });
+  }
+
+  Future<void> _toggle(AppSettings settings, bool value) async {
+    if (value) {
+      // Verify biometrics work before enabling
+      final success = await BiometricService.authenticate();
+      if (!success) return;
+    }
+    await settings.setBiometricLock(value);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final settings = AppSettingsScope.of(context);
+    final enabled  = settings.biometricLock;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      child: Row(
+        children: [
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: AppColors.primary.withValues(alpha: 0.10),
+              borderRadius: BorderRadius.circular(9),
+            ),
+            child: Icon(Icons.fingerprint, color: AppColors.primary, size: 20),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Biometric lock',
+                  style: TextStyle(
+                    fontSize: 15,
+                    color: context.cPrimaryText,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  _loading
+                      ? 'Checking availability…'
+                      : _available
+                          ? 'Lock app on background'
+                          : 'Not available on this device',
+                  style: TextStyle(fontSize: 12, color: context.cMutedText),
+                ),
+              ],
+            ),
+          ),
+          if (_loading)
+            const SizedBox(
+              width: 20,
+              height: 20,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            )
+          else
+            Switch(
+              value: enabled,
+              onChanged: _available ? (v) => _toggle(settings, v) : null,
+              activeThumbColor: AppColors.primary,
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── Google Wallet row ─────────────────────────────────────────────────────────
+
+class _WalletRow extends StatefulWidget {
+  const _WalletRow();
+
+  @override
+  State<_WalletRow> createState() => _WalletRowState();
+}
+
+class _WalletRowState extends State<_WalletRow> with WidgetsBindingObserver {
   final _service = WalletNotificationService();
   bool _granted = false;
 
@@ -516,7 +785,6 @@ class _WalletPermissionTileState extends State<_WalletPermissionTile>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    // Re-check after user returns from system settings.
     if (state == AppLifecycleState.resumed) _checkPermission();
   }
 
@@ -533,35 +801,66 @@ class _WalletPermissionTileState extends State<_WalletPermissionTile>
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Auto-capture Google Wallet payment notifications as expenses.',
-          style: TextStyle(fontSize: 12, color: context.cMutedText),
-        ),
-        const SizedBox(height: 10),
-        Row(
+    return InkWell(
+      onTap: _service.openPermissionSettings,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        child: Row(
           children: [
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                color: AppColors.primary.withValues(alpha: 0.10),
+                borderRadius: BorderRadius.circular(9),
+              ),
+              child: Icon(Icons.wallet, color: AppColors.primary, size: 20),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Google Wallet',
+                    style: TextStyle(
+                      fontSize: 15,
+                      color: context.cPrimaryText,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    'Auto-capture payment notifications',
+                    style:
+                        TextStyle(fontSize: 12, color: context.cMutedText),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               decoration: BoxDecoration(
                 color: _granted
                     ? Colors.green.withValues(alpha: 0.12)
                     : AppColors.expense.withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(6),
+                borderRadius: BorderRadius.circular(8),
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Icon(
-                    _granted ? Icons.check_circle_outline : Icons.block_outlined,
+                    _granted
+                        ? Icons.check_circle_outline
+                        : Icons.block_outlined,
                     size: 13,
                     color: _granted ? Colors.green : AppColors.expense,
                   ),
                   const SizedBox(width: 4),
                   Text(
-                    _granted ? 'Access granted' : 'Access not granted',
+                    _granted ? 'Granted' : 'Not granted',
                     style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w600,
@@ -571,23 +870,30 @@ class _WalletPermissionTileState extends State<_WalletPermissionTile>
                 ],
               ),
             ),
-            const SizedBox(width: 10),
-            if (!_granted)
-              TextButton.icon(
-                onPressed: _service.openPermissionSettings,
-                style: TextButton.styleFrom(
-                  foregroundColor: AppColors.primary,
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  textStyle: const TextStyle(fontSize: 12),
-                ),
-                icon: const Icon(Icons.settings_outlined, size: 14),
-                label: const Text('Grant access'),
-              ),
+            const SizedBox(width: 2),
+            Icon(Icons.chevron_right, color: context.cMutedText, size: 20),
           ],
         ),
-      ],
+      ),
+    );
+  }
+}
+
+// ─── Shared sheet handle ───────────────────────────────────────────────────────
+
+class _SheetHandle extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 12, bottom: 8),
+      child: Container(
+        width: 40,
+        height: 4,
+        decoration: BoxDecoration(
+          color: context.cMutedText.withValues(alpha: 0.4),
+          borderRadius: BorderRadius.circular(10),
+        ),
+      ),
     );
   }
 }

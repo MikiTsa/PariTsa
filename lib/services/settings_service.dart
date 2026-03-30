@@ -2,10 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 abstract final class SettingsService {
-  static const _kTheme      = 'settings_theme';
-  static const _kCurrency   = 'settings_currency';
-  static const _kDateFormat = 'settings_date_format';
-  static const _kDefaultTab = 'settings_default_tab';
+  static const _kTheme          = 'settings_theme';
+  static const _kCurrency       = 'settings_currency';
+  static const _kDateFormat     = 'settings_date_format';
+  static const _kDefaultTab     = 'settings_default_tab';
+  static const _kBiometricLock  = 'settings_biometric_lock';
 
   // ── Theme ──────────────────────────────────────────────────────────────────
 
@@ -54,5 +55,17 @@ abstract final class SettingsService {
   static Future<void> saveDefaultTab(int tab) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setInt(_kDefaultTab, tab);
+  }
+
+  // ── Biometric lock ─────────────────────────────────────────────────────────
+
+  static Future<bool> loadBiometricLock() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool(_kBiometricLock) ?? false;
+  }
+
+  static Future<void> saveBiometricLock(bool enabled) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_kBiometricLock, enabled);
   }
 }

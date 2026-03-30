@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:expenses_tracker/services/auth_service.dart';
 import 'package:expenses_tracker/screens/auth/login_screen.dart';
+import 'package:expenses_tracker/screens/biometric_lock_screen.dart';
 import 'package:expenses_tracker/screens/home_screen.dart';
 import 'package:expenses_tracker/theme/app_colors.dart';
 
@@ -26,9 +27,9 @@ class AuthWrapper extends StatelessWidget {
           );
         }
 
-        // If user is logged in, show HomeScreen
+        // If user is logged in, show HomeScreen behind the biometric gate
         if (snapshot.hasData && snapshot.data != null) {
-          return const HomeScreen();
+          return const BiometricGate(child: HomeScreen());
         }
 
         // If user is not logged in, show LoginScreen

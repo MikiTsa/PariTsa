@@ -5,15 +5,17 @@ import 'package:expenses_tracker/services/settings_service.dart';
 // ─── Data model ───────────────────────────────────────────────────────────────
 
 class AppSettings extends ChangeNotifier {
-  ThemeMode _themeMode  = ThemeMode.system;
-  String    _currency   = 'EUR';
-  String    _dateFormat = 'yMMMd';
-  int       _defaultTab = 0;
+  ThemeMode _themeMode     = ThemeMode.system;
+  String    _currency      = 'EUR';
+  String    _dateFormat    = 'yMMMd';
+  int       _defaultTab    = 0;
+  bool      _biometricLock = false;
 
-  ThemeMode get themeMode  => _themeMode;
-  String    get currency   => _currency;
-  String    get dateFormat => _dateFormat;
-  int       get defaultTab => _defaultTab;
+  ThemeMode get themeMode     => _themeMode;
+  String    get currency      => _currency;
+  String    get dateFormat    => _dateFormat;
+  int       get defaultTab    => _defaultTab;
+  bool      get biometricLock => _biometricLock;
 
   // ── Currency symbol ────────────────────────────────────────────────────────
 
@@ -81,10 +83,11 @@ class AppSettings extends ChangeNotifier {
   // ── Load / save ────────────────────────────────────────────────────────────
 
   Future<void> load() async {
-    _themeMode  = await SettingsService.loadTheme();
-    _currency   = await SettingsService.loadCurrency();
-    _dateFormat = await SettingsService.loadDateFormat();
-    _defaultTab = await SettingsService.loadDefaultTab();
+    _themeMode     = await SettingsService.loadTheme();
+    _currency      = await SettingsService.loadCurrency();
+    _dateFormat    = await SettingsService.loadDateFormat();
+    _defaultTab    = await SettingsService.loadDefaultTab();
+    _biometricLock = await SettingsService.loadBiometricLock();
     notifyListeners();
   }
 
@@ -114,6 +117,13 @@ class AppSettings extends ChangeNotifier {
     _defaultTab = tab;
     notifyListeners();
     await SettingsService.saveDefaultTab(tab);
+  }
+
+  Future<void> setBiometricLock(bool enabled) async {
+    if (_biometricLock == enabled) return;
+    _biometricLock = enabled;
+    notifyListeners();
+    await SettingsService.saveBiometricLock(enabled);
   }
 }
 
