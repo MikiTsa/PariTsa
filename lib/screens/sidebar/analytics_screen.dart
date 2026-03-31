@@ -8,13 +8,14 @@ import 'package:expenses_tracker/services/firebase_service.dart';
 import 'package:expenses_tracker/theme/app_colors.dart';
 import 'package:expenses_tracker/theme/theme_extensions.dart';
 
-enum _Period { thisMonth, last3Months, thisYear, allTime }
+enum _Period { thisMonth, last3Months, thisYear, allTime, custom }
 
 const _kPeriodLabels = {
   _Period.thisMonth:   'This Month',
   _Period.last3Months: 'Last 3 Months',
   _Period.thisYear:    'This Year',
   _Period.allTime:     'All Time',
+  _Period.custom:      'Custom Range',
 };
 
 class AnalyticsScreen extends StatefulWidget {
@@ -131,6 +132,8 @@ class _AnalyticsTabState extends State<_AnalyticsTab>
 
   List<Transaction> _all = [];
   _Period _period = _Period.thisMonth;
+  DateTime? _customStart;
+  DateTime? _customEnd;
   String? _selectedTag;
   bool _loading = true;
 
@@ -171,20 +174,31 @@ class _AnalyticsTabState extends State<_AnalyticsTab>
 
   List<Transaction> get _filtered {
     final now = DateTime.now();
-    DateTime? cutoff;
+    List<Transaction> result;
     switch (_period) {
       case _Period.thisMonth:
-        cutoff = DateTime(now.year, now.month, 1);
+        final cutoff = DateTime(now.year, now.month, 1);
+        result = _all.where((t) => !t.date.isBefore(cutoff)).toList();
       case _Period.last3Months:
-        cutoff = DateTime(now.year, now.month - 2, 1);
+        final cutoff = DateTime(now.year, now.month - 2, 1);
+        result = _all.where((t) => !t.date.isBefore(cutoff)).toList();
       case _Period.thisYear:
-        cutoff = DateTime(now.year, 1, 1);
+        final cutoff = DateTime(now.year, 1, 1);
+        result = _all.where((t) => !t.date.isBefore(cutoff)).toList();
       case _Period.allTime:
-        cutoff = null;
+        result = List.of(_all);
+      case _Period.custom:
+        if (_customStart != null && _customEnd != null) {
+          final end = DateTime(
+              _customEnd!.year, _customEnd!.month, _customEnd!.day, 23, 59, 59);
+          result = _all
+              .where((t) =>
+                  !t.date.isBefore(_customStart!) && !t.date.isAfter(end))
+              .toList();
+        } else {
+          result = List.of(_all);
+        }
     }
-    var result = cutoff == null
-        ? _all
-        : _all.where((t) => !t.date.isBefore(cutoff!)).toList();
     if (_selectedTag != null) {
       result = result.where((t) => t.tag == _selectedTag).toList();
     }
@@ -223,6 +237,37 @@ class _AnalyticsTabState extends State<_AnalyticsTab>
       };
 
   // ── Bottom sheet pickers ──────────────────────────────────────────────────
+
+  Future<void> _pickCustomRange(BuildContext context) async {
+    final initial = DateTimeRange(
+      start: _customStart ?? DateTime.now().subtract(const Duration(days: 30)),
+      end: _customEnd ?? DateTime.now(),
+    );
+    final picked = await showDateRangePicker(
+      context: context,
+      firstDate: DateTime(2020),
+      lastDate: DateTime.now(),
+      initialDateRange: initial,
+      builder: (context, child) {
+        final scheme = ColorScheme.fromSeed(
+          seedColor: AppColors.balticBlue,
+          brightness: Theme.of(context).brightness,
+          dynamicSchemeVariant: DynamicSchemeVariant.tonalSpot,
+        );
+        return Theme(
+          data: Theme.of(context).copyWith(colorScheme: scheme),
+          child: child!,
+        );
+      },
+    );
+    if (picked != null && mounted) {
+      setState(() {
+        _period = _Period.custom;
+        _customStart = picked.start;
+        _customEnd = picked.end;
+      });
+    }
+  }
 
   void _showPeriodSheet(BuildContext context) {
     final color = _accentColor;
@@ -263,6 +308,7 @@ class _AnalyticsTabState extends State<_AnalyticsTab>
             const SizedBox(height: 4),
             ..._kPeriodLabels.entries.map((e) {
               final selected = _period == e.key;
+              final isCustom = e.key == _Period.custom;
               return ListTile(
                 contentPadding: const EdgeInsets.symmetric(horizontal: 20),
                 title: Text(
@@ -275,10 +321,17 @@ class _AnalyticsTabState extends State<_AnalyticsTab>
                 ),
                 trailing: selected
                     ? Icon(Icons.check_rounded, color: color)
-                    : null,
+                    : isCustom
+                        ? Icon(Icons.date_range_outlined,
+                            size: 18, color: context.cMutedText)
+                        : null,
                 onTap: () {
-                  setState(() => _period = e.key);
                   Navigator.pop(ctx);
+                  if (isCustom) {
+                    _pickCustomRange(context);
+                  } else {
+                    setState(() => _period = e.key);
+                  }
                 },
               );
             }),
@@ -415,7 +468,11 @@ class _AnalyticsTabState extends State<_AnalyticsTab>
             children: [
               _FilterPill(
                 icon: Icons.calendar_today_outlined,
-                label: _kPeriodLabels[_period]!,
+                label: _period == _Period.custom &&
+                        _customStart != null &&
+                        _customEnd != null
+                    ? '${DateFormat('d MMM').format(_customStart!)} – ${DateFormat('d MMM').format(_customEnd!)}'
+                    : _kPeriodLabels[_period]!,
                 isActive: _period != _Period.thisMonth,
                 color: color,
                 onTap: () => _showPeriodSheet(context),
