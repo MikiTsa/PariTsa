@@ -7,6 +7,7 @@ import 'package:expenses_tracker/providers/app_settings.dart';
 import 'package:expenses_tracker/services/firebase_service.dart';
 import 'package:expenses_tracker/theme/app_colors.dart';
 import 'package:expenses_tracker/theme/theme_extensions.dart';
+import 'package:expenses_tracker/widgets/transaction_list.dart';
 
 enum _Period { thisMonth, last3Months, thisYear, allTime, custom }
 
@@ -499,7 +500,7 @@ class _AnalyticsTabState extends State<_AnalyticsTab>
           else ...[
             _buildSectionHeader(context, 'By Category'),
             const SizedBox(height: 12),
-            _buildCategoryChart(context, settings, categories, total, color),
+            _buildCategoryChart(context, settings, categories, total, color, filtered),
             const SizedBox(height: 24),
             _buildSectionHeader(context, 'Monthly Trend'),
             const SizedBox(height: 12),
@@ -585,6 +586,7 @@ class _AnalyticsTabState extends State<_AnalyticsTab>
     List<MapEntry<String, double>> categories,
     double total,
     Color color,
+    List<Transaction> filtered,
   ) {
     if (categories.isEmpty) return const SizedBox.shrink();
     final maxVal = categories.first.value;
@@ -592,13 +594,28 @@ class _AnalyticsTabState extends State<_AnalyticsTab>
     return Card(
       elevation: 2,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          children: categories.map((e) {
-            final pct = total > 0 ? e.value / total * 100 : 0.0;
-            return Padding(
-              padding: const EdgeInsets.only(bottom: 14),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        children: categories.asMap().entries.map((entry) {
+          final i = entry.key;
+          final e = entry.value;
+          final pct = total > 0 ? e.value / total * 100 : 0.0;
+          final categoryTransactions =
+              filtered.where((t) => (t.category ?? 'Uncategorized') == e.key).toList();
+          return InkWell(
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => _CategoryTransactionsScreen(
+                  categoryName: e.key,
+                  transactions: categoryTransactions,
+                  type: widget.type,
+                  color: color,
+                ),
+              ),
+            ),
+            child: Padding(
+              padding: EdgeInsets.fromLTRB(16, i == 0 ? 16 : 8, 16, 14),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -623,6 +640,12 @@ class _AnalyticsTabState extends State<_AnalyticsTab>
                           fontSize: 12,
                           color: context.cMutedText,
                         ),
+                      ),
+                      const SizedBox(width: 4),
+                      Icon(
+                        Icons.chevron_right_rounded,
+                        size: 16,
+                        color: context.cMutedText,
                       ),
                     ],
                   ),
@@ -675,9 +698,9 @@ class _AnalyticsTabState extends State<_AnalyticsTab>
                   ),
                 ],
               ),
-            );
-          }).toList(),
-        ),
+            ),
+          );
+        }).toList(),
       ),
     );
   }
@@ -867,6 +890,73 @@ class _SummaryCard extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+// ─── Category transactions screen ─────────────────────────────────────────────
+
+class _CategoryTransactionsScreen extends StatelessWidget {
+  final String categoryName;
+  final List<Transaction> transactions;
+  final TransactionType type;
+  final Color color;
+
+  const _CategoryTransactionsScreen({
+    required this.categoryName,
+    required this.transactions,
+    required this.type,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: context.cBackground,
+      appBar: AppBar(
+        backgroundColor: context.cAppBar,
+        foregroundColor: context.cPrimaryText,
+        elevation: 0,
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              categoryName,
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                color: context.cPrimaryText,
+                fontSize: 17,
+              ),
+            ),
+            Text(
+              '${transactions.length} transaction${transactions.length == 1 ? '' : 's'}',
+              style: TextStyle(
+                fontSize: 12,
+                color: color,
+                fontWeight: FontWeight.normal,
+              ),
+            ),
+          ],
+        ),
+      ),
+      body: transactions.isEmpty
+          ? Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.receipt_long_outlined, size: 48, color: context.cMutedText),
+                  const SizedBox(height: 12),
+                  Text(
+                    'No transactions',
+                    style: TextStyle(color: context.cMutedText, fontSize: 16),
+                  ),
+                ],
+              ),
+            )
+          : TransactionList(
+              transactions: transactions,
+              transactionType: type,
+            ),
     );
   }
 }
