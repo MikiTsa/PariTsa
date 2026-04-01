@@ -38,6 +38,11 @@ class _HomeScreenState extends State<HomeScreen>
   List<Transaction>? expenses;
   List<Transaction>? incomes;
   List<Transaction>? savings;
+  List<Transaction>? sharedExpenses;
+
+  // Nested subscriptions for shared expenses — one per shared tracker
+  final Map<String, StreamSubscription<dynamic>> _sharedTxSubs = {};
+  final Map<String, List<Transaction>> _sharedTxData = {};
 
   @override
   void initState() {
@@ -137,12 +142,74 @@ class _HomeScreenState extends State<HomeScreen>
         if (mounted) setState(() => savings = transactions);
       }),
     );
+
+    // Subscribe to the tracker list, then maintain one tx-subscription per tracker
+    _subscriptions.add(
+      _firebaseService.getSharedTrackersStream().listen((trackers) {
+        if (!mounted) return;
+        final uid = _firebaseService.currentUserId;
+        if (uid == null) return;
+
+        final currentIds = trackers.map((t) => t.id).toSet();
+
+        // Cancel subs for trackers the user left
+        for (final id in _sharedTxSubs.keys
+            .where((k) => !currentIds.contains(k))
+            .toList()) {
+          _sharedTxSubs[id]?.cancel();
+          _sharedTxSubs.remove(id);
+          _sharedTxData.remove(id);
+        }
+
+        // Start subs for newly joined trackers
+        for (final tracker in trackers) {
+          if (_sharedTxSubs.containsKey(tracker.id)) continue;
+          final tid = tracker.id;
+          _sharedTxSubs[tid] = _firebaseService
+              .getSharedTransactionsStream(tid)
+              .listen((txList) {
+            if (!mounted) return;
+            _sharedTxData[tid] = txList
+                .where((tx) => tx.splits.any((s) => s.uid == uid))
+                .map((tx) {
+                  final split =
+                      tx.splits.firstWhere((s) => s.uid == uid);
+                  return Transaction(
+                    id: tx.id,
+                    title: tx.title,
+                    amount: split.amount,
+                    date: tx.date,
+                    category: tx.category,
+                    note: tx.note,
+                    tag: tx.tag,
+                    sharedTrackerId: tid,
+                  );
+                })
+                .toList();
+            setState(() {
+              sharedExpenses =
+                  _sharedTxData.values.expand((l) => l).toList();
+            });
+          }, onError: (Object e) {
+            debugPrint('Shared tx stream error (tracker $tid): $e');
+          });
+        }
+
+        // If user has no trackers, clear immediately
+        if (currentIds.isEmpty) {
+          setState(() => sharedExpenses = []);
+        }
+      }),
+    );
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     for (final sub in _subscriptions) {
+      sub.cancel();
+    }
+    for (final sub in _sharedTxSubs.values) {
       sub.cancel();
     }
     _tabController?.dispose();
@@ -152,8 +219,9 @@ class _HomeScreenState extends State<HomeScreen>
   double get currentBalance {
     double income  = (incomes  ?? []).fold(0, (sum, item) => sum + item.amount);
     double expense = (expenses ?? []).fold(0, (sum, item) => sum + item.amount);
+    double shared  = (sharedExpenses ?? []).fold(0, (sum, item) => sum + item.amount);
     double saving  = (savings  ?? []).fold(0, (sum, item) => sum + item.amount);
-    return income - expense - saving;
+    return income - expense - shared - saving;
   }
 
   double get totalSavings {
@@ -196,6 +264,12 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   Future<void> removeTransaction(String id, TransactionType type) async {
+    // Shared expenses are managed in Shared Tracking, not deletable here
+    final isShared = sharedExpenses?.any((e) => e.id == id) ?? false;
+    if (isShared) {
+      _showErrorSnackBar('Open Shared Tracking to manage shared expenses');
+      return;
+    }
     try {
       await _firebaseService.deleteTransaction(id, type);
     } catch (e) {
@@ -407,7 +481,12 @@ class _HomeScreenState extends State<HomeScreen>
                     physics: const _EasySwipeTabPhysics(),
                     children: [
                       ExpensesScreen(
-                        expenses: expenses,
+                        expenses: expenses == null && sharedExpenses == null
+                            ? null
+                            : [
+                                ...(expenses ?? []),
+                                ...(sharedExpenses ?? []),
+                              ],
                         onAddExpense: (t) =>
                             addTransaction(t, TransactionType.expense),
                         onEditExpense: (t) =>

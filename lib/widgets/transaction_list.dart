@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:expenses_tracker/models/transaction.dart';
 import 'package:expenses_tracker/providers/app_settings.dart';
+import 'package:expenses_tracker/screens/sidebar/shared_tracker_detail_screen.dart';
 import 'package:expenses_tracker/theme/app_colors.dart';
 import 'package:expenses_tracker/theme/theme_extensions.dart';
 
@@ -127,6 +128,36 @@ class TransactionList extends StatelessWidget {
                           ),
                         ),
                       ),
+                    if (transaction.isShared)
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 6,
+                          vertical: 1,
+                        ),
+                        decoration: BoxDecoration(
+                          color: AppColors.primary.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.people_outline,
+                              size: 11,
+                              color: AppColors.primary,
+                            ),
+                            const SizedBox(width: 3),
+                            Text(
+                              'Shared',
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: AppColors.primary,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                   ],
                 ),
                 trailing: Column(
@@ -176,6 +207,14 @@ class TransactionList extends StatelessWidget {
   }
 
   void _confirmDelete(BuildContext context, Transaction transaction) {
+    if (transaction.isShared) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Open Shared Tracking to manage shared expenses'),
+        ),
+      );
+      return;
+    }
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -319,18 +358,38 @@ class TransactionList extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: 12),
-                FloatingActionButton(
-                  onPressed: () {
-                    Navigator.pop(context);
-                    if (onEditTransaction != null) {
-                      onEditTransaction!(transaction);
-                    }
-                  },
-                  backgroundColor: typeColor,
-                  foregroundColor: Colors.white,
-                  elevation: 2,
-                  child: const Icon(Icons.edit_outlined),
-                ),
+                if (transaction.isShared)
+                  FloatingActionButton(
+                    onPressed: () {
+                      Navigator.pop(context);
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => SharedTrackerDetailScreen(
+                            trackerId: transaction.sharedTrackerId!,
+                          ),
+                        ),
+                      );
+                    },
+                    backgroundColor: AppColors.primary,
+                    foregroundColor: Colors.white,
+                    elevation: 2,
+                    tooltip: 'Open in Shared Tracking',
+                    child: const Icon(Icons.people_outline),
+                  )
+                else
+                  FloatingActionButton(
+                    onPressed: () {
+                      Navigator.pop(context);
+                      if (onEditTransaction != null) {
+                        onEditTransaction!(transaction);
+                      }
+                    },
+                    backgroundColor: typeColor,
+                    foregroundColor: Colors.white,
+                    elevation: 2,
+                    child: const Icon(Icons.edit_outlined),
+                  ),
               ],
             ),
           ],

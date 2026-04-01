@@ -13,6 +13,11 @@ class Transaction {
   final String? category;
   final String? note;
   final String? tag;
+  // Non-null when this entry is derived from a shared tracker (Option B).
+  // The stored amount is only the current user's split portion.
+  final String? sharedTrackerId;
+
+  bool get isShared => sharedTrackerId != null;
 
   Transaction({
     String? id,
@@ -22,6 +27,7 @@ class Transaction {
     this.category,
     this.note,
     this.tag,
+    this.sharedTrackerId,
   }) : id = id ?? const Uuid().v4();
 
   // Create a copy of the transaction with some modified fields
@@ -41,6 +47,7 @@ class Transaction {
       category: category ?? this.category,
       note: note ?? this.note,
       tag: tag ?? this.tag,
+      sharedTrackerId: sharedTrackerId,
     );
   }
 

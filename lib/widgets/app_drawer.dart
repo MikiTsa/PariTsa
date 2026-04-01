@@ -4,6 +4,7 @@ import 'package:expenses_tracker/screens/sidebar/history_screen.dart';
 import 'package:expenses_tracker/screens/sidebar/analytics_screen.dart';
 import 'package:expenses_tracker/screens/sidebar/profile_screen.dart';
 import 'package:expenses_tracker/screens/sidebar/settings_screen.dart';
+import 'package:expenses_tracker/screens/sidebar/shared_tracking_screen.dart';
 import 'package:expenses_tracker/theme/app_colors.dart';
 import 'package:expenses_tracker/theme/theme_extensions.dart';
 
@@ -80,6 +81,11 @@ class AppDrawer extends StatelessWidget {
               icon: Icons.person_outline,
               label: 'Profile',
               onTap: () => _navigate(context, const ProfileScreen()),
+            ),
+            _DrawerItem(
+              icon: Icons.people_outline,
+              label: 'Shared Tracking',
+              onTap: () => _navigate(context, const SharedTrackingScreen()),
             ),
             _DrawerItem(
               icon: Icons.history,

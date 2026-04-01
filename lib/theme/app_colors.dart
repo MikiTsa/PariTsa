@@ -36,6 +36,18 @@ abstract final class AppColors {
   static const Color balanceIncome  = balticBlue;
   static const Color balanceSaving  = lightBronze;
 
+  // ── Shared tracker member colours (assigned in order as members join) ────
+  static const List<Color> sharedMemberColors = [
+    balticBlue,
+    burntTangerine,
+    amberGlow,
+    pacificCyan,
+    burntPeach,
+    vividTangerine,
+    lightBronze,
+    mutedTeal,
+  ];
+
   // ── Aliases (old names used across other files) ───────────────────────────
   static const Color darkCyan     = pacificCyan;
   static const Color pearlAqua    = mutedTeal;

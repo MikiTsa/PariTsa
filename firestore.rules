@@ -70,6 +70,58 @@ service cloud.firestore {
           && request.resource.data.displayName is string;
     }
 
+    function isValidSharedTracker() {
+      let required = ['id', 'name', 'createdAt', 'createdBy', 'inviteCode', 'members', 'memberIds'];
+      return request.resource.data.keys().hasAll(required)
+          && request.resource.data.id         is string
+          && request.resource.data.name       is string
+          && request.resource.data.name.size() > 0
+          && request.resource.data.createdAt  is timestamp
+          && request.resource.data.createdBy  is string
+          && request.resource.data.inviteCode is string
+          && request.resource.data.members    is list
+          && request.resource.data.memberIds  is list;
+    }
+
+    function isValidSharedTrackerUpdate() {
+      let allowed = ['name', 'members', 'memberIds'];
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(allowed);
+    }
+
+    // Allows a non-member to join by adding only themselves to members/memberIds.
+    function isJoiningTracker() {
+      let changes = request.resource.data.diff(resource.data).affectedKeys();
+      return changes.hasOnly(['members', 'memberIds'])
+          && request.auth.uid in request.resource.data.memberIds
+          && !(request.auth.uid in resource.data.memberIds);
+    }
+
+    function isValidSharedTransaction() {
+      let required = ['id', 'title', 'totalAmount', 'date', 'splits'];
+      let allowed  = ['id', 'title', 'totalAmount', 'date', 'splits', 'category', 'note', 'tag'];
+      return request.resource.data.keys().hasAll(required)
+          && request.resource.data.keys().hasOnly(allowed)
+          && request.resource.data.id          is string
+          && request.resource.data.title       is string
+          && request.resource.data.title.size() > 0
+          && request.resource.data.totalAmount is number
+          && request.resource.data.totalAmount > 0
+          && request.resource.data.date        is timestamp
+          && request.resource.data.splits      is list
+          && (
+               !request.resource.data.keys().hasAny(['category']) ||
+               request.resource.data.category is string
+             )
+          && (
+               !request.resource.data.keys().hasAny(['note']) ||
+               request.resource.data.note is string
+             )
+          && (
+               !request.resource.data.keys().hasAny(['tag']) ||
+               request.resource.data.tag is string
+             );
+    }
+
     // ========================================
     // USERS COLLECTION
     // ========================================
@@ -103,6 +155,58 @@ service cloud.firestore {
         allow read: if isOwner(userId);
         allow write: if isOwner(userId) && isValidCategoryData();
       }
+    }
+
+    // ========================================
+    // SHARED TRACKERS COLLECTION
+    // ========================================
+
+    match /sharedTrackers/{trackerId} {
+      // Any member can read their tracker.
+      allow read: if isAuthenticated()
+          && request.auth.uid in resource.data.memberIds;
+
+      // Creator creates — must include themselves as first member
+      allow create: if isAuthenticated()
+          && request.auth.uid == request.resource.data.createdBy
+          && request.auth.uid in request.resource.data.memberIds
+          && isValidSharedTracker();
+
+      // Existing member updates (rename, add/remove members), OR a new user
+      // joining via invite code (adds only themselves to members/memberIds)
+      allow update: if isAuthenticated() && (
+          (request.auth.uid in resource.data.memberIds && isValidSharedTrackerUpdate())
+          || isJoiningTracker()
+        );
+
+      // Only creator can delete
+      allow delete: if isAuthenticated()
+          && request.auth.uid == resource.data.createdBy;
+
+      // SHARED TRANSACTIONS subcollection
+      match /transactions/{txId} {
+        allow read, delete: if isAuthenticated()
+            && request.auth.uid in get(/databases/$(database)/documents/sharedTrackers/$(trackerId)).data.memberIds;
+
+        allow create, update: if isAuthenticated()
+            && request.auth.uid in get(/databases/$(database)/documents/sharedTrackers/$(trackerId)).data.memberIds
+            && isValidSharedTransaction();
+      }
+    }
+
+    // ========================================
+    // INVITE CODES INDEX
+    // ========================================
+
+    match /inviteCodes/{code} {
+      // Any authenticated user can read (needed to look up trackerId by code)
+      allow read: if isAuthenticated();
+      // Only the creator writes their own invite code document
+      allow create: if isAuthenticated()
+          && request.resource.data.createdBy == request.auth.uid;
+      allow delete: if isAuthenticated()
+          && resource.data.createdBy == request.auth.uid;
+      allow update: if false;
     }
 
     // ========================================
