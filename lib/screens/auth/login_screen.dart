@@ -3,6 +3,7 @@ import 'package:expenses_tracker/services/auth_service.dart';
 import 'package:expenses_tracker/screens/auth/register_screen.dart';
 import 'package:expenses_tracker/screens/auth/forgot_password_screen.dart';
 import 'package:expenses_tracker/theme/app_colors.dart';
+import 'package:expenses_tracker/theme/theme_extensions.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -70,7 +71,7 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: context.cBackground,
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(
@@ -90,22 +91,22 @@ class _LoginScreenState extends State<LoginScreen> {
                   const SizedBox(height: 16),
 
                   // Title
-                  const Text(
+                  Text(
                     'PariTsa',
                     style: TextStyle(
                       fontSize: 28,
                       fontWeight: FontWeight.bold,
-                      color: AppColors.primaryText,
+                      color: context.cPrimaryText,
                       letterSpacing: 0.5,
                     ),
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 6),
 
-                  const Text(
+                  Text(
                     'Sign in to continue',
                     style: TextStyle(
-                      color: AppColors.secondaryText,
+                      color: context.cSecondaryText,
                       fontSize: 15,
                     ),
                     textAlign: TextAlign.center,
@@ -185,7 +186,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         );
                       },
                       style: TextButton.styleFrom(
-                        foregroundColor: AppColors.secondaryText,
+                        foregroundColor: context.cSecondaryText,
                       ),
                       child: const Text('Forgot Password?'),
                     ),
@@ -216,24 +217,24 @@ class _LoginScreenState extends State<LoginScreen> {
                   const SizedBox(height: 24),
 
                   // Divider
-                  const Row(
+                  Row(
                     children: [
                       Expanded(
-                        child: Divider(color: AppColors.divider, thickness: 1),
+                        child: Divider(color: context.cDivider, thickness: 1),
                       ),
                       Padding(
-                        padding: EdgeInsets.symmetric(horizontal: 16),
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
                         child: Text(
                           'OR',
                           style: TextStyle(
-                            color: AppColors.secondaryText,
+                            color: context.cSecondaryText,
                             fontWeight: FontWeight.bold,
                             fontSize: 13,
                           ),
                         ),
                       ),
                       Expanded(
-                        child: Divider(color: AppColors.divider, thickness: 1),
+                        child: Divider(color: context.cDivider, thickness: 1),
                       ),
                     ],
                   ),
@@ -247,17 +248,17 @@ class _LoginScreenState extends State<LoginScreen> {
                       size: 32,
                       color: AppColors.expense,
                     ),
-                    label: const Text(
+                    label: Text(
                       'Sign in with Google',
                       style: TextStyle(
                         fontSize: 16,
-                        color: AppColors.primaryText,
+                        color: context.cPrimaryText,
                       ),
                     ),
                     style: OutlinedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 16),
-                      side: const BorderSide(color: AppColors.divider),
-                      backgroundColor: AppColors.cardBackground,
+                      side: BorderSide(color: context.cDivider),
+                      backgroundColor: context.cCard,
                     ),
                   ),
                   const SizedBox(height: 24),
@@ -266,9 +267,9 @@ class _LoginScreenState extends State<LoginScreen> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      const Text(
+                      Text(
                         "Don't have an account? ",
-                        style: TextStyle(color: AppColors.secondaryText),
+                        style: TextStyle(color: context.cSecondaryText),
                       ),
                       TextButton(
                         onPressed: () {

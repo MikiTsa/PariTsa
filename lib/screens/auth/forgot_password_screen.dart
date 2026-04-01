@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:expenses_tracker/services/auth_service.dart';
 import 'package:expenses_tracker/theme/app_colors.dart';
+import 'package:expenses_tracker/theme/theme_extensions.dart';
 
 class ForgotPasswordScreen extends StatefulWidget {
   const ForgotPasswordScreen({super.key});
@@ -54,25 +55,25 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: context.cBackground,
       appBar: AppBar(
-        title: const Text('Forgot Password'),
-        backgroundColor: AppColors.appBar,
-        foregroundColor: AppColors.appBarText,
-        iconTheme: const IconThemeData(color: AppColors.appBarText),
+        title: Text('Forgot Password', style: TextStyle(color: context.cPrimaryText)),
+        backgroundColor: context.cAppBar,
+        foregroundColor: context.cPrimaryText,
+        iconTheme: IconThemeData(color: context.cPrimaryText),
       ),
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(
             padding: const EdgeInsets.all(24.0),
-            child: _emailSent ? _buildSuccessView() : _buildFormView(),
+            child: _emailSent ? _buildSuccessView(context) : _buildFormView(context),
           ),
         ),
       ),
     );
   }
 
-  Widget _buildFormView() {
+  Widget _buildFormView(BuildContext context) {
     return Form(
       key: _formKey,
       child: Column(
@@ -82,20 +83,20 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
           const Icon(Icons.lock_reset, size: 80, color: AppColors.primary),
           const SizedBox(height: 16),
 
-          const Text(
+          Text(
             'Reset Your Password',
             style: TextStyle(
               fontSize: 24,
               fontWeight: FontWeight.bold,
-              color: AppColors.primaryText,
+              color: context.cPrimaryText,
             ),
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 8),
 
-          const Text(
+          Text(
             "Enter your email and we'll send you a reset link",
-            style: TextStyle(color: AppColors.secondaryText, fontSize: 15),
+            style: TextStyle(color: context.cSecondaryText, fontSize: 15),
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 32),
@@ -150,7 +151,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
     );
   }
 
-  Widget _buildSuccessView() {
+  Widget _buildSuccessView(BuildContext context) {
     return Column(
       mainAxisAlignment: MainAxisAlignment.center,
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -158,20 +159,20 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
         const Icon(Icons.check_circle, size: 80, color: AppColors.income),
         const SizedBox(height: 16),
 
-        const Text(
+        Text(
           'Email Sent!',
           style: TextStyle(
             fontSize: 24,
             fontWeight: FontWeight.bold,
-            color: AppColors.primaryText,
+            color: context.cPrimaryText,
           ),
           textAlign: TextAlign.center,
         ),
         const SizedBox(height: 8),
 
-        const Text(
+        Text(
           'Check your email for a password reset link.',
-          style: TextStyle(color: AppColors.secondaryText, fontSize: 15),
+          style: TextStyle(color: context.cSecondaryText, fontSize: 15),
           textAlign: TextAlign.center,
         ),
         const SizedBox(height: 32),

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:expenses_tracker/services/auth_service.dart';
 import 'package:expenses_tracker/theme/app_colors.dart';
+import 'package:expenses_tracker/theme/theme_extensions.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -65,12 +66,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: context.cBackground,
       appBar: AppBar(
-        title: const Text('Create Account'),
-        backgroundColor: AppColors.appBar,
-        foregroundColor: AppColors.appBarText,
-        iconTheme: const IconThemeData(color: AppColors.appBarText),
+        title: Text('Create Account', style: TextStyle(color: context.cPrimaryText)),
+        backgroundColor: context.cAppBar,
+        foregroundColor: context.cPrimaryText,
+        iconTheme: IconThemeData(color: context.cPrimaryText),
       ),
       body: SafeArea(
         child: Center(
@@ -90,21 +91,21 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   ),
                   const SizedBox(height: 16),
 
-                  const Text(
+                  Text(
                     'Join PariTsa',
                     style: TextStyle(
                       fontSize: 24,
                       fontWeight: FontWeight.bold,
-                      color: AppColors.primaryText,
+                      color: context.cPrimaryText,
                     ),
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 6),
 
-                  const Text(
+                  Text(
                     'Create your account to get started',
                     style: TextStyle(
-                      color: AppColors.secondaryText,
+                      color: context.cSecondaryText,
                       fontSize: 15,
                     ),
                     textAlign: TextAlign.center,
@@ -261,9 +262,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      const Text(
+                      Text(
                         'Already have an account? ',
-                        style: TextStyle(color: AppColors.secondaryText),
+                        style: TextStyle(color: context.cSecondaryText),
                       ),
                       TextButton(
                         onPressed: () => Navigator.pop(context),
