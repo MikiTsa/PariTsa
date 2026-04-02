@@ -387,17 +387,31 @@ class TransactionList extends StatelessWidget {
                           transactionType == TransactionType.expense)
                         Padding(
                           padding: const EdgeInsets.only(right: 8),
-                          child: FloatingActionButton.small(
+                          child: ElevatedButton.icon(
                             onPressed: () {
                               Navigator.pop(context);
                               onMoveToShared!(transaction);
                             },
-                            backgroundColor:
-                                AppColors.primary.withValues(alpha: 0.12),
-                            foregroundColor: AppColors.primary,
-                            elevation: 0,
-                            tooltip: 'Move to Shared Tracker',
-                            child: const Icon(Icons.people_outline, size: 20),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor:
+                                  AppColors.primary.withValues(alpha: 0.12),
+                              foregroundColor: AppColors.primary,
+                              elevation: 0,
+                              shadowColor: Colors.transparent,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 14,
+                                vertical: 12,
+                              ),
+                              textStyle: const TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                              ),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(14),
+                              ),
+                            ),
+                            icon: const Icon(Icons.people_outline, size: 18),
+                            label: const Text('Move to Shared'),
                           ),
                         ),
                       FloatingActionButton(

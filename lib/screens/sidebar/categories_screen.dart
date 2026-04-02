@@ -38,6 +38,7 @@ class _CategoriesScreenState extends State<CategoriesScreen>
         if (didPop) _popNotifier.value = true;
       },
       child: Scaffold(
+        resizeToAvoidBottomInset: false,
         backgroundColor: context.cBackground,
         appBar: AppBar(
           backgroundColor: context.cAppBar,

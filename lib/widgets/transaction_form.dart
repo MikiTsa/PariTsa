@@ -106,6 +106,7 @@ class _TransactionFormState extends State<TransactionForm> {
     final color = _typeColor;
     showModalBottomSheet(
       context: context,
+      isScrollControlled: true,
       backgroundColor: Theme.of(context).cardColor,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
@@ -203,25 +204,59 @@ class _TransactionFormState extends State<TransactionForm> {
     final tempController = TextEditingController(text: _tagController.text);
     final color = _typeColor;
 
-    showDialog(
+    showModalBottomSheet(
       context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setDialogState) {
+      isScrollControlled: true,
+      backgroundColor: Theme.of(context).cardColor,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setSheetState) {
           final query = tempController.text.trim().toLowerCase();
           final suggestions = _usedTags
               .where((t) => query.isEmpty || t.toLowerCase().contains(query))
               .toList();
 
-          return AlertDialog(
-            title: const Text('Tag (Optional)'),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
+          final viewInsets = MediaQuery.of(ctx).viewInsets.bottom;
+          final maxHeight = MediaQuery.of(ctx).size.height * 0.9 - viewInsets;
+          return ConstrainedBox(
+            constraints: BoxConstraints(maxHeight: maxHeight),
+            child: SingleChildScrollView(
+              padding: EdgeInsets.only(
+                left: 20,
+                right: 20,
+                top: 20,
+                bottom: viewInsets + 20,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                Center(
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: AppColors.pearlAqua,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'Tag (Optional)',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: context.cPrimaryText,
+                  ),
+                ),
+                const SizedBox(height: 12),
                 TextField(
                   controller: tempController,
                   autofocus: true,
-                  onChanged: (_) => setDialogState(() {}),
+                  onChanged: (_) => setSheetState(() {}),
                   decoration: const InputDecoration(
                     hintText: 'e.g. Vacation 2025, Side project',
                     prefixIcon: Icon(
@@ -248,39 +283,43 @@ class _TransactionFormState extends State<TransactionForm> {
                         backgroundColor: isSelected
                             ? color
                             : color.withValues(alpha: 0.12),
-                        side: BorderSide(
-                          color: color.withValues(alpha: 0.3),
-                        ),
+                        side: BorderSide(color: color.withValues(alpha: 0.3)),
                         padding: const EdgeInsets.symmetric(horizontal: 4),
                         materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                         onPressed: () {
                           tempController.text = tag;
-                          setDialogState(() {});
+                          setSheetState(() {});
                         },
                       );
                     }).toList(),
                   ),
                 ],
+                const SizedBox(height: 16),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    TextButton(
+                      onPressed: () {
+                        setState(() => _tagController.text = '');
+                        Navigator.pop(ctx);
+                      },
+                      child: const Text('Clear'),
+                    ),
+                    const SizedBox(width: 8),
+                    TextButton(
+                      onPressed: () {
+                        setState(
+                            () => _tagController.text = tempController.text.trim());
+                        Navigator.pop(ctx);
+                      },
+                      style: TextButton.styleFrom(foregroundColor: color),
+                      child: const Text('Done'),
+                    ),
+                  ],
+                ),
               ],
             ),
-            actions: [
-              TextButton(
-                onPressed: () {
-                  setState(() => _tagController.text = '');
-                  Navigator.pop(context);
-                },
-                child: const Text('Clear'),
-              ),
-              TextButton(
-                onPressed: () {
-                  setState(() =>
-                      _tagController.text = tempController.text.trim());
-                  Navigator.pop(context);
-                },
-                style: TextButton.styleFrom(foregroundColor: color),
-                child: const Text('Done'),
-              ),
-            ],
+            ),
           );
         },
       ),

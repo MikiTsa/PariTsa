@@ -75,35 +75,42 @@ class AppDrawer extends StatelessWidget {
               ),
             ),
 
-            const SizedBox(height: 8),
+            Expanded(
+              child: SingleChildScrollView(
+                child: Column(
+                  children: [
+                    const SizedBox(height: 8),
 
-            _DrawerItem(
-              icon: Icons.person_outline,
-              label: 'Profile',
-              onTap: () => _navigate(context, const ProfileScreen()),
-            ),
-            _DrawerItem(
-              icon: Icons.people_outline,
-              label: 'Shared Tracking',
-              onTap: () => _navigate(context, const SharedTrackingScreen()),
-            ),
-            _DrawerItem(
-              icon: Icons.history,
-              label: 'History',
-              onTap: () => _navigate(context, const HistoryScreen()),
-            ),
-            _DrawerItem(
-              icon: Icons.bar_chart_rounded,
-              label: 'Analytics',
-              onTap: () => _navigate(context, const AnalyticsScreen()),
-            ),
-            _DrawerItem(
-              icon: Icons.category_outlined,
-              label: 'Categories',
-              onTap: () => _navigate(context, const CategoriesScreen()),
+                    _DrawerItem(
+                      icon: Icons.person_outline,
+                      label: 'Profile',
+                      onTap: () => _navigate(context, const ProfileScreen()),
+                    ),
+                    _DrawerItem(
+                      icon: Icons.people_outline,
+                      label: 'Shared Tracking',
+                      onTap: () => _navigate(context, const SharedTrackingScreen()),
+                    ),
+                    _DrawerItem(
+                      icon: Icons.history,
+                      label: 'History',
+                      onTap: () => _navigate(context, const HistoryScreen()),
+                    ),
+                    _DrawerItem(
+                      icon: Icons.bar_chart_rounded,
+                      label: 'Analytics',
+                      onTap: () => _navigate(context, const AnalyticsScreen()),
+                    ),
+                    _DrawerItem(
+                      icon: Icons.category_outlined,
+                      label: 'Categories',
+                      onTap: () => _navigate(context, const CategoriesScreen()),
+                    ),
+                  ],
+                ),
+              ),
             ),
 
-            const Spacer(),
             Divider(color: context.cDivider, height: 1),
             const SizedBox(height: 4),
 

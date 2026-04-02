@@ -287,6 +287,7 @@ class _TrackerCard extends StatelessWidget {
           '${tracker.members.length} member${tracker.members.length == 1 ? '' : 's'} · '
           'Created ${DateFormat.yMMMd().format(tracker.createdAt)}',
           style: TextStyle(color: context.cMutedText, fontSize: 12),
+          overflow: TextOverflow.ellipsis,
         ),
         trailing: Row(
           mainAxisSize: MainAxisSize.min,

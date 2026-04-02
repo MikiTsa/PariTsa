@@ -79,10 +79,16 @@ class _LockScreen extends StatelessWidget {
     return Scaffold(
       backgroundColor: context.cBackground,
       body: SafeArea(
-        child: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
+        child: SingleChildScrollView(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              minHeight: MediaQuery.of(context).size.height -
+                  MediaQuery.of(context).padding.vertical,
+            ),
+            child: Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
               // App name
               Text(
                 'PariTsa',
@@ -147,6 +153,8 @@ class _LockScreen extends StatelessWidget {
           ),
         ),
       ),
+        ),
+        ),
     );
   }
 }
