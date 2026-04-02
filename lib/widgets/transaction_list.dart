@@ -184,7 +184,7 @@ class TransactionList extends StatelessWidget {
                   ],
                 ),
                 onTap: () => _showTransactionDetails(context, transaction, settings),
-                onLongPress: () => _confirmDelete(context, transaction),
+                onLongPress: () => _showLongPressActions(context, transaction),
               ),
             ),
           ],
@@ -208,7 +208,7 @@ class TransactionList extends StatelessWidget {
     return settings.formatDate(date);
   }
 
-  void _confirmDelete(BuildContext context, Transaction transaction) {
+  void _showLongPressActions(BuildContext context, Transaction transaction) {
     if (transaction.isShared) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -217,24 +217,103 @@ class TransactionList extends StatelessWidget {
       );
       return;
     }
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        decoration: BoxDecoration(
+          color: context.cCard,
+          borderRadius: const BorderRadius.only(
+            topLeft: Radius.circular(24),
+            topRight: Radius.circular(24),
+          ),
+        ),
+        padding: const EdgeInsets.fromLTRB(8, 12, 8, 28),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: context.cMutedText.withValues(alpha: 0.4),
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
+            const SizedBox(height: 8),
+            if (onMoveToShared != null &&
+                transactionType == TransactionType.expense)
+              ListTile(
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                leading: Icon(Icons.people_outline, color: AppColors.primary),
+                title: Text(
+                  'Move to Shared Tracker',
+                  style: TextStyle(
+                    color: AppColors.primary,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  onMoveToShared!(transaction);
+                },
+              ),
+            ListTile(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              leading: const Icon(
+                Icons.delete_outline,
+                color: AppColors.deleteAction,
+              ),
+              title: const Text(
+                'Delete',
+                style: TextStyle(
+                  color: AppColors.deleteAction,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              onTap: () {
+                Navigator.pop(ctx);
+                _confirmDelete(context, transaction);
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _confirmDelete(BuildContext context, Transaction transaction) {
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (ctx) => AlertDialog(
+        icon: const Icon(
+          Icons.delete_outline,
+          color: AppColors.deleteAction,
+          size: 28,
+        ),
         title: const Text('Delete transaction?'),
         content: Text('Are you sure you want to delete "${transaction.title}"?'),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.pop(ctx),
             child: const Text('Cancel'),
           ),
           TextButton(
             onPressed: () {
-              Navigator.pop(context);
+              Navigator.pop(ctx);
               if (onRemoveTransaction != null) {
                 onRemoveTransaction!(transaction.id, transactionType);
               }
             },
-            style: TextButton.styleFrom(foregroundColor: AppColors.deleteAction),
+            style: TextButton.styleFrom(
+              foregroundColor: AppColors.deleteAction,
+              backgroundColor: AppColors.deleteAction.withValues(alpha: 0.08),
+            ),
             child: const Text('Delete'),
           ),
         ],
@@ -380,53 +459,17 @@ class TransactionList extends StatelessWidget {
                     child: const Icon(Icons.people_outline),
                   )
                 else
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      if (onMoveToShared != null &&
-                          transactionType == TransactionType.expense)
-                        Padding(
-                          padding: const EdgeInsets.only(right: 8),
-                          child: ElevatedButton.icon(
-                            onPressed: () {
-                              Navigator.pop(context);
-                              onMoveToShared!(transaction);
-                            },
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor:
-                                  AppColors.primary.withValues(alpha: 0.12),
-                              foregroundColor: AppColors.primary,
-                              elevation: 0,
-                              shadowColor: Colors.transparent,
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 14,
-                                vertical: 12,
-                              ),
-                              textStyle: const TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600,
-                              ),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(14),
-                              ),
-                            ),
-                            icon: const Icon(Icons.people_outline, size: 18),
-                            label: const Text('Move to Shared'),
-                          ),
-                        ),
-                      FloatingActionButton(
-                        onPressed: () {
-                          Navigator.pop(context);
-                          if (onEditTransaction != null) {
-                            onEditTransaction!(transaction);
-                          }
-                        },
-                        backgroundColor: typeColor,
-                        foregroundColor: Colors.white,
-                        elevation: 2,
-                        child: const Icon(Icons.edit_outlined),
-                      ),
-                    ],
+                  FloatingActionButton(
+                    onPressed: () {
+                      Navigator.pop(context);
+                      if (onEditTransaction != null) {
+                        onEditTransaction!(transaction);
+                      }
+                    },
+                    backgroundColor: typeColor,
+                    foregroundColor: Colors.white,
+                    elevation: 2,
+                    child: const Icon(Icons.edit_outlined),
                   ),
               ],
             ),
