@@ -1,4 +1,5 @@
 import 'package:expenses_tracker/models/shared_tracker.dart';
+import 'package:expenses_tracker/models/transaction.dart';
 import 'package:expenses_tracker/providers/app_settings.dart';
 import 'package:expenses_tracker/services/firebase_service.dart';
 import 'package:expenses_tracker/theme/app_colors.dart';
@@ -34,12 +35,15 @@ class _SharedTransactionFormState extends State<SharedTransactionForm> {
   String? _category;
   List<String> _categories = [];
   late List<_SplitEntry> _splitEntries;
+  late String _currentUserUid;
   bool _saving = false;
   bool _syncing = false;
 
   @override
   void initState() {
     super.initState();
+    _currentUserUid = FirebaseService().currentUserId ?? '';
+
     final initial = widget.initialTransaction;
     if (initial != null) {
       _titleCtrl.text = initial.title;
@@ -47,7 +51,10 @@ class _SharedTransactionFormState extends State<SharedTransactionForm> {
       _noteCtrl.text = initial.note ?? '';
       _tagCtrl.text = initial.tag ?? '';
       _date = initial.date;
-      _category = initial.category;
+      // Seed from the current user's own split.myCategory, falling back to
+      // the shared tx.category (handles move-to-shared pre-fill).
+      _category = initial.splitFor(_currentUserUid)?.myCategory
+          ?? initial.category;
       _splitEntries = widget.tracker.members.map((m) {
         final existingSplit = initial.splitFor(m.uid);
         return _SplitEntry(
@@ -57,6 +64,7 @@ class _SharedTransactionFormState extends State<SharedTransactionForm> {
                 ? existingSplit.amount.toStringAsFixed(2)
                 : '',
           ),
+          myCategory: existingSplit?.myCategory,
         );
       }).toList();
     } else {
@@ -67,26 +75,21 @@ class _SharedTransactionFormState extends State<SharedTransactionForm> {
     }
 
     _setupSplitListeners();
-    _initCategories();
+    _loadCategories();
   }
 
-  /// Load categories synchronously from the tracker's shared list.
-  /// If the tracker has none (old doc), fall back to the standard defaults.
-  void _initCategories() {
-    const defaults = [
-      'Food', 'Transport', 'Groceries', 'Fixed Expenses',
-      'Entertainment', 'Gifts', 'Shopping', 'Other',
-    ];
-    final base = widget.tracker.categories.isNotEmpty
-        ? List<String>.from(widget.tracker.categories)
-        : List<String>.from(defaults);
-
-    // Ensure the pre-selected category (edit / move-to-shared) is always visible
-    // even if it isn't in the tracker's list yet.
-    if (_category != null && !base.contains(_category)) {
-      base.insert(0, _category!);
-    }
-    _categories = base;
+  /// Load the current user's personal expense categories for use as analytics
+  /// buckets. Each member independently picks from their own vocabulary.
+  Future<void> _loadCategories() async {
+    final cats = await FirebaseService().getCategories(TransactionType.expense);
+    if (!mounted) return;
+    setState(() {
+      _categories = cats;
+      // Keep selection visible even if it isn't in the user's personal list.
+      if (_category != null && !_categories.contains(_category)) {
+        _categories = [_category!, ..._categories];
+      }
+    });
   }
 
   void _setupSplitListeners() {
@@ -160,7 +163,12 @@ class _SharedTransactionFormState extends State<SharedTransactionForm> {
             if (name.isEmpty) return;
             if (_categories.contains(name)) {
               // Already exists — just select it
-              setState(() => _category = name);
+              setState(() {
+                _category = name;
+                for (final e in _splitEntries) {
+                  if (e.member.uid == _currentUserUid) e.myCategory = name;
+                }
+              });
               Navigator.pop(ctx);
               return;
             }
@@ -171,6 +179,9 @@ class _SharedTransactionFormState extends State<SharedTransactionForm> {
             setState(() {
               _categories = [..._categories, name];
               _category = name;
+              for (final e in _splitEntries) {
+                if (e.member.uid == _currentUserUid) e.myCategory = name;
+              }
             });
             Navigator.pop(ctx);
           }
@@ -198,7 +209,7 @@ class _SharedTransactionFormState extends State<SharedTransactionForm> {
                     child: Align(
                       alignment: Alignment.centerLeft,
                       child: Text(
-                        'Category',
+                        'My Category',
                         style: TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.bold,
@@ -235,7 +246,14 @@ class _SharedTransactionFormState extends State<SharedTransactionForm> {
                                   color: AppColors.primary)
                               : null,
                           onTap: () {
-                            setState(() => _category = cat);
+                            setState(() {
+                              _category = cat;
+                              for (final e in _splitEntries) {
+                                if (e.member.uid == _currentUserUid) {
+                                  e.myCategory = cat;
+                                }
+                              }
+                            });
                             Navigator.pop(ctx);
                           },
                         );
@@ -413,8 +431,12 @@ class _SharedTransactionFormState extends State<SharedTransactionForm> {
         .map((e) => Split(
               uid: e.member.uid,
               displayName: e.member.displayName,
-              amount:
-                  double.parse(e.controller.text.replaceAll(',', '.')),
+              amount: double.parse(e.controller.text.replaceAll(',', '.')),
+              // Store the current user's personal category on their own split.
+              // Other members' splits keep whatever myCategory they already had.
+              myCategory: e.member.uid == _currentUserUid
+                  ? _category
+                  : e.myCategory,
             ))
         .toList();
 
@@ -566,7 +588,7 @@ class _SharedTransactionFormState extends State<SharedTransactionForm> {
                   borderRadius: BorderRadius.circular(10),
                   child: InputDecorator(
                     decoration: const InputDecoration(
-                      labelText: 'Category (optional)',
+                      labelText: 'My category (optional)',
                       prefixIcon: Icon(Icons.category_outlined,
                           color: AppColors.darkCyan),
                     ),
@@ -749,5 +771,7 @@ class _SharedTransactionFormState extends State<SharedTransactionForm> {
 class _SplitEntry {
   final TrackerMember member;
   final TextEditingController controller;
-  _SplitEntry({required this.member, required this.controller});
+  // Preserved across edits; updated when this user changes their category.
+  String? myCategory;
+  _SplitEntry({required this.member, required this.controller, this.myCategory});
 }

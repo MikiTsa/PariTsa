@@ -39,32 +39,42 @@ class Split {
   final String uid;
   final String displayName;
   final double amount;
+  // Each member's personal analytics category — independent of the shared
+  // transaction's display label. Null means fall back to tx.category.
+  final String? myCategory;
 
   const Split({
     required this.uid,
     required this.displayName,
     required this.amount,
+    this.myCategory,
   });
 
   double percentageOf(double total) =>
       total > 0 ? (amount / total) * 100 : 0;
 
-  Split copyWith({double? amount}) => Split(
+  Split copyWith({double? amount, String? myCategory}) => Split(
     uid: uid,
     displayName: displayName,
     amount: amount ?? this.amount,
+    myCategory: myCategory ?? this.myCategory,
   );
 
-  Map<String, dynamic> toMap() => {
-    'uid': uid,
-    'displayName': displayName,
-    'amount': amount,
-  };
+  Map<String, dynamic> toMap() {
+    final map = <String, dynamic>{
+      'uid': uid,
+      'displayName': displayName,
+      'amount': amount,
+    };
+    if (myCategory != null) map['myCategory'] = myCategory;
+    return map;
+  }
 
   factory Split.fromMap(Map<String, dynamic> map) => Split(
     uid: map['uid'] as String? ?? '',
     displayName: map['displayName'] as String? ?? 'Unknown',
     amount: (map['amount'] as num?)?.toDouble() ?? 0.0,
+    myCategory: map['myCategory'] as String?,
   );
 }
 

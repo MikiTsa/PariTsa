@@ -592,7 +592,7 @@ class FirebaseService {
                     title: tx.title,
                     amount: split.amount,
                     date: tx.date,
-                    category: tx.category,
+                    category: split.myCategory ?? tx.category,
                     note: tx.note,
                     tag: tx.tag,
                     sharedTrackerId: trackerId,

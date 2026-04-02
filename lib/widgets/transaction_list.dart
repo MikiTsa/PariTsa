@@ -380,40 +380,48 @@ class TransactionList extends StatelessWidget {
                     child: const Icon(Icons.people_outline),
                   )
                 else
-                  FloatingActionButton(
-                    onPressed: () {
-                      Navigator.pop(context);
-                      if (onEditTransaction != null) {
-                        onEditTransaction!(transaction);
-                      }
-                    },
-                    backgroundColor: typeColor,
-                    foregroundColor: Colors.white,
-                    elevation: 2,
-                    child: const Icon(Icons.edit_outlined),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (onMoveToShared != null &&
+                          transactionType == TransactionType.expense)
+                        Padding(
+                          padding: const EdgeInsets.only(right: 8),
+                          child: FloatingActionButton.small(
+                            onPressed: () {
+                              Navigator.pop(context);
+                              onMoveToShared!(transaction);
+                            },
+                            backgroundColor:
+                                AppColors.primary.withValues(alpha: 0.12),
+                            foregroundColor: AppColors.primary,
+                            elevation: 0,
+                            tooltip: 'Move to Shared Tracker',
+                            child: const Icon(Icons.people_outline, size: 20),
+                          ),
+                        ),
+                      FloatingActionButton(
+                        onPressed: () {
+                          Navigator.pop(context);
+                          if (onEditTransaction != null) {
+                            onEditTransaction!(transaction);
+                          }
+                        },
+                        backgroundColor: typeColor,
+                        foregroundColor: Colors.white,
+                        elevation: 2,
+                        child: const Icon(Icons.edit_outlined),
+                      ),
+                    ],
                   ),
               ],
             ),
-            if (onMoveToShared != null &&
-                !transaction.isShared &&
-                transactionType == TransactionType.expense) ...[
-              const SizedBox(height: 12),
-              const Divider(height: 1),
-              TextButton.icon(
-                onPressed: () {
-                  Navigator.pop(context);
-                  onMoveToShared!(transaction);
-                },
-                icon: const Icon(Icons.people_outline, size: 16),
-                label: const Text('Move to Shared Tracker'),
-                style: TextButton.styleFrom(foregroundColor: AppColors.primary),
-              ),
-            ],
           ],
         ),
       ),
     );
   }
+
 
   Widget _buildDetailRow(
     BuildContext context,
