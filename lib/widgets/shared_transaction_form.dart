@@ -1,5 +1,4 @@
 import 'package:expenses_tracker/models/shared_tracker.dart';
-import 'package:expenses_tracker/models/transaction.dart';
 import 'package:expenses_tracker/providers/app_settings.dart';
 import 'package:expenses_tracker/services/firebase_service.dart';
 import 'package:expenses_tracker/theme/app_colors.dart';
@@ -68,7 +67,26 @@ class _SharedTransactionFormState extends State<SharedTransactionForm> {
     }
 
     _setupSplitListeners();
-    _loadCategories();
+    _initCategories();
+  }
+
+  /// Load categories synchronously from the tracker's shared list.
+  /// If the tracker has none (old doc), fall back to the standard defaults.
+  void _initCategories() {
+    const defaults = [
+      'Food', 'Transport', 'Groceries', 'Fixed Expenses',
+      'Entertainment', 'Gifts', 'Shopping', 'Other',
+    ];
+    final base = widget.tracker.categories.isNotEmpty
+        ? List<String>.from(widget.tracker.categories)
+        : List<String>.from(defaults);
+
+    // Ensure the pre-selected category (edit / move-to-shared) is always visible
+    // even if it isn't in the tracker's list yet.
+    if (_category != null && !base.contains(_category)) {
+      base.insert(0, _category!);
+    }
+    _categories = base;
   }
 
   void _setupSplitListeners() {
@@ -96,11 +114,6 @@ class _SharedTransactionFormState extends State<SharedTransactionForm> {
         entry.controller.addListener(() => setState(() {}));
       }
     }
-  }
-
-  Future<void> _loadCategories() async {
-    final cats = await FirebaseService().getCategories(TransactionType.expense);
-    if (mounted) setState(() => _categories = cats);
   }
 
   @override
@@ -131,78 +144,140 @@ class _SharedTransactionFormState extends State<SharedTransactionForm> {
       (_totalAmount - _splitSum).abs() < 0.01 && _totalAmount > 0;
 
   void _showCategorySheet(BuildContext context) {
+    final addCtrl = TextEditingController();
+
     showModalBottomSheet(
       context: context,
+      isScrollControlled: true,
       backgroundColor: Theme.of(context).cardColor,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      builder: (ctx) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const SizedBox(height: 12),
-            Container(
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                color: AppColors.pearlAqua,
-                borderRadius: BorderRadius.circular(10),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setSheetState) {
+          void addCategory() {
+            final name = addCtrl.text.trim();
+            if (name.isEmpty) return;
+            if (_categories.contains(name)) {
+              // Already exists — just select it
+              setState(() => _category = name);
+              Navigator.pop(ctx);
+              return;
+            }
+            // Persist to the tracker and update local list
+            FirebaseService().addCategoryToSharedTracker(
+              widget.tracker.id, name,
+            );
+            setState(() {
+              _categories = [..._categories, name];
+              _category = name;
+            });
+            Navigator.pop(ctx);
+          }
+
+          return SafeArea(
+            child: Padding(
+              padding: EdgeInsets.only(
+                bottom: MediaQuery.of(ctx).viewInsets.bottom,
               ),
-            ),
-            const SizedBox(height: 16),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  'Category',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    color: context.cPrimaryText,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const SizedBox(height: 12),
+                  Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: AppColors.pearlAqua,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
                   ),
-                ),
-              ),
-            ),
-            const SizedBox(height: 4),
-            ConstrainedBox(
-              constraints: BoxConstraints(
-                maxHeight: MediaQuery.of(context).size.height * 0.45,
-              ),
-              child: ListView(
-                shrinkWrap: true,
-                children: _categories.map((cat) {
-                  final selected = _category == cat;
-                  return ListTile(
-                    contentPadding:
-                        const EdgeInsets.symmetric(horizontal: 20),
-                    title: Text(
-                      cat,
-                      style: TextStyle(
-                        color: selected
-                            ? AppColors.primary
-                            : context.cPrimaryText,
-                        fontWeight: selected
-                            ? FontWeight.bold
-                            : FontWeight.normal,
+                  const SizedBox(height: 16),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        'Category',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: context.cPrimaryText,
+                        ),
                       ),
                     ),
-                    trailing: selected
-                        ? const Icon(Icons.check_rounded,
-                            color: AppColors.primary)
-                        : null,
-                    onTap: () {
-                      setState(() => _category = cat);
-                      Navigator.pop(ctx);
-                    },
-                  );
-                }).toList(),
+                  ),
+                  const SizedBox(height: 4),
+                  ConstrainedBox(
+                    constraints: BoxConstraints(
+                      maxHeight: MediaQuery.of(context).size.height * 0.35,
+                    ),
+                    child: ListView(
+                      shrinkWrap: true,
+                      children: _categories.map((cat) {
+                        final selected = _category == cat;
+                        return ListTile(
+                          contentPadding:
+                              const EdgeInsets.symmetric(horizontal: 20),
+                          title: Text(
+                            cat,
+                            style: TextStyle(
+                              color: selected
+                                  ? AppColors.primary
+                                  : context.cPrimaryText,
+                              fontWeight: selected
+                                  ? FontWeight.bold
+                                  : FontWeight.normal,
+                            ),
+                          ),
+                          trailing: selected
+                              ? const Icon(Icons.check_rounded,
+                                  color: AppColors.primary)
+                              : null,
+                          onTap: () {
+                            setState(() => _category = cat);
+                            Navigator.pop(ctx);
+                          },
+                        );
+                      }).toList(),
+                    ),
+                  ),
+                  const Divider(height: 1),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 12, 12, 16),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: addCtrl,
+                            textCapitalization: TextCapitalization.sentences,
+                            decoration: InputDecoration(
+                              hintText: 'Add a category…',
+                              hintStyle: TextStyle(color: context.cMutedText),
+                              isDense: true,
+                              border: InputBorder.none,
+                            ),
+                            onSubmitted: (_) => addCategory(),
+                            onChanged: (_) => setSheetState(() {}),
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.add_circle_outline),
+                          color: addCtrl.text.trim().isEmpty
+                              ? context.cMutedText
+                              : AppColors.primary,
+                          onPressed: addCtrl.text.trim().isEmpty
+                              ? null
+                              : addCategory,
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ),
             ),
-            const SizedBox(height: 8),
-          ],
-        ),
+          );
+        },
       ),
     );
   }
@@ -220,6 +295,90 @@ class _SharedTransactionFormState extends State<SharedTransactionForm> {
       final value = i == 0 ? rounded + remainder : rounded;
       _splitEntries[i].controller.text = value.toStringAsFixed(2);
     }
+  }
+
+  void _showTagDialog() {
+    final tempController = TextEditingController(text: _tagCtrl.text);
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Theme.of(context).cardColor,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) {
+        final viewInsets = MediaQuery.of(ctx).viewInsets.bottom;
+        final maxHeight = MediaQuery.of(ctx).size.height * 0.9 - viewInsets;
+        return ConstrainedBox(
+          constraints: BoxConstraints(maxHeight: maxHeight),
+          child: SingleChildScrollView(
+            padding: EdgeInsets.only(
+              left: 20,
+              right: 20,
+              top: 20,
+              bottom: viewInsets + 20,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+            Center(
+              child: Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: AppColors.pearlAqua,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'Tag (Optional)',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: context.cPrimaryText,
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: tempController,
+              autofocus: true,
+              decoration: const InputDecoration(
+                hintText: 'e.g. Vacation 2025, Side project',
+                prefixIcon: Icon(Icons.label_outline, color: AppColors.darkCyan),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                TextButton(
+                  onPressed: () {
+                    setState(() => _tagCtrl.text = '');
+                    Navigator.pop(ctx);
+                  },
+                  child: const Text('Clear'),
+                ),
+                const SizedBox(width: 8),
+                TextButton(
+                  onPressed: () {
+                    setState(() => _tagCtrl.text = tempController.text.trim());
+                    Navigator.pop(ctx);
+                  },
+                  style: TextButton.styleFrom(foregroundColor: AppColors.primary),
+                  child: const Text('Done'),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  },
+);
   }
 
   Future<void> _pickDate() async {
@@ -312,15 +471,49 @@ class _SharedTransactionFormState extends State<SharedTransactionForm> {
               ),
               const SizedBox(height: 16),
 
-              Text(
-                widget.initialTransaction == null
-                    ? 'Add shared expense'
-                    : 'Edit shared expense',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: context.cPrimaryText,
-                ),
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      widget.initialTransaction == null
+                          ? 'Add shared expense'
+                          : 'Edit shared expense',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: context.cPrimaryText,
+                      ),
+                    ),
+                  ),
+                  GestureDetector(
+                    onTap: _showTagDialog,
+                    child: Stack(
+                      clipBehavior: Clip.none,
+                      children: [
+                        Icon(
+                          Icons.label_outline,
+                          color: _tagCtrl.text.isNotEmpty
+                              ? AppColors.primary
+                              : AppColors.mutedText,
+                          size: 26,
+                        ),
+                        if (_tagCtrl.text.isNotEmpty)
+                          Positioned(
+                            top: -2,
+                            right: -2,
+                            child: Container(
+                              width: 8,
+                              height: 8,
+                              decoration: const BoxDecoration(
+                                color: AppColors.primary,
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ],
               ),
               const SizedBox(height: 20),
 
@@ -406,14 +599,7 @@ class _SharedTransactionFormState extends State<SharedTransactionForm> {
               ),
               const SizedBox(height: 12),
 
-              // Tag
-              TextFormField(
-                controller: _tagCtrl,
-                decoration:
-                    const InputDecoration(labelText: 'Tag (optional)'),
-                textCapitalization: TextCapitalization.sentences,
-              ),
-              const SizedBox(height: 24),
+              const SizedBox(height: 12),
 
               // ── Splits section ────────────────────────────────────────────
               Row(

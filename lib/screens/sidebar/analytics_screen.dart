@@ -130,13 +130,22 @@ class _AnalyticsTabState extends State<_AnalyticsTab>
 
   final _service = FirebaseService();
   StreamSubscription<dynamic>? _sub;
+  StreamSubscription<dynamic>? _sharedSub;
 
-  List<Transaction> _all = [];
+  List<Transaction> _personalTxs = [];
+  List<Transaction> _sharedTxs = [];
+  bool _includeShared = true;
+
   _Period _period = _Period.thisMonth;
   DateTime? _customStart;
   DateTime? _customEnd;
   String? _selectedTag;
   bool _loading = true;
+
+  List<Transaction> get _all =>
+      (_includeShared && widget.type == TransactionType.expense)
+          ? [..._personalTxs, ..._sharedTxs]
+          : _personalTxs;
 
   @override
   void initState() {
@@ -144,15 +153,24 @@ class _AnalyticsTabState extends State<_AnalyticsTab>
     widget.popNotifier.addListener(_onPop);
     _sub = _service.getTransactionsStream(widget.type).listen((list) {
       if (mounted && !widget.popNotifier.value) {
-        setState(() { _all = list; _loading = false; });
+        setState(() { _personalTxs = list; _loading = false; });
       }
     });
+    if (widget.type == TransactionType.expense) {
+      _sharedSub = _service.getMySharedExpensesStream().listen((list) {
+        if (mounted && !widget.popNotifier.value) {
+          setState(() => _sharedTxs = list);
+        }
+      });
+    }
   }
 
   void _onPop() {
     if (widget.popNotifier.value) {
       _sub?.cancel();
       _sub = null;
+      _sharedSub?.cancel();
+      _sharedSub = null;
     }
   }
 
@@ -160,6 +178,7 @@ class _AnalyticsTabState extends State<_AnalyticsTab>
   void dispose() {
     widget.popNotifier.removeListener(_onPop);
     _sub?.cancel();
+    _sharedSub?.cancel();
     super.dispose();
   }
 
@@ -275,69 +294,75 @@ class _AnalyticsTabState extends State<_AnalyticsTab>
     showModalBottomSheet(
       context: context,
       backgroundColor: context.cCard,
+      isScrollControlled: true,
+      constraints: BoxConstraints(
+        maxHeight: MediaQuery.of(context).size.height * 0.85,
+      ),
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       builder: (ctx) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const SizedBox(height: 12),
-            Container(
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                color: AppColors.pearlAqua,
-                borderRadius: BorderRadius.circular(10),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const SizedBox(height: 12),
+              Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: AppColors.pearlAqua,
+                  borderRadius: BorderRadius.circular(10),
+                ),
               ),
-            ),
-            const SizedBox(height: 16),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  'Time Period',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    color: context.cPrimaryText,
+              const SizedBox(height: 16),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    'Time Period',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: context.cPrimaryText,
+                    ),
                   ),
                 ),
               ),
-            ),
-            const SizedBox(height: 4),
-            ..._kPeriodLabels.entries.map((e) {
-              final selected = _period == e.key;
-              final isCustom = e.key == _Period.custom;
-              return ListTile(
-                contentPadding: const EdgeInsets.symmetric(horizontal: 20),
-                title: Text(
-                  e.value,
-                  style: TextStyle(
-                    color: selected ? color : context.cPrimaryText,
-                    fontWeight:
-                        selected ? FontWeight.bold : FontWeight.normal,
+              const SizedBox(height: 4),
+              ..._kPeriodLabels.entries.map((e) {
+                final selected = _period == e.key;
+                final isCustom = e.key == _Period.custom;
+                return ListTile(
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 20),
+                  title: Text(
+                    e.value,
+                    style: TextStyle(
+                      color: selected ? color : context.cPrimaryText,
+                      fontWeight:
+                          selected ? FontWeight.bold : FontWeight.normal,
+                    ),
                   ),
-                ),
-                trailing: selected
-                    ? Icon(Icons.check_rounded, color: color)
-                    : isCustom
-                        ? Icon(Icons.date_range_outlined,
-                            size: 18, color: context.cMutedText)
-                        : null,
-                onTap: () {
-                  Navigator.pop(ctx);
-                  if (isCustom) {
-                    _pickCustomRange(context);
-                  } else {
-                    setState(() => _period = e.key);
-                  }
-                },
-              );
-            }),
-            const SizedBox(height: 8),
-          ],
+                  trailing: selected
+                      ? Icon(Icons.check_rounded, color: color)
+                      : isCustom
+                          ? Icon(Icons.date_range_outlined,
+                              size: 18, color: context.cMutedText)
+                          : null,
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    if (isCustom) {
+                      _pickCustomRange(context);
+                    } else {
+                      setState(() => _period = e.key);
+                    }
+                  },
+                );
+              }),
+              const SizedBox(height: 8),
+            ],
+          ),
         ),
       ),
     );
@@ -348,11 +373,16 @@ class _AnalyticsTabState extends State<_AnalyticsTab>
     showModalBottomSheet(
       context: context,
       backgroundColor: context.cCard,
+      isScrollControlled: true,
+      constraints: BoxConstraints(
+        maxHeight: MediaQuery.of(context).size.height * 0.85,
+      ),
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       builder: (ctx) => SafeArea(
-        child: Column(
+        child: SingleChildScrollView(
+          child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             const SizedBox(height: 12),
@@ -432,6 +462,7 @@ class _AnalyticsTabState extends State<_AnalyticsTab>
             }),
             const SizedBox(height: 8),
           ],
+          ),
         ),
       ),
     );
@@ -465,30 +496,44 @@ class _AnalyticsTabState extends State<_AnalyticsTab>
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // ── Filter pills row ──────────────────────────────────────────────
-          Row(
-            children: [
-              _FilterPill(
-                icon: Icons.calendar_today_outlined,
-                label: _period == _Period.custom &&
-                        _customStart != null &&
-                        _customEnd != null
-                    ? '${DateFormat('d MMM').format(_customStart!)} – ${DateFormat('d MMM').format(_customEnd!)}'
-                    : _kPeriodLabels[_period]!,
-                isActive: _period != _Period.thisMonth,
-                color: color,
-                onTap: () => _showPeriodSheet(context),
-              ),
-              if (tags.isNotEmpty) ...[
-                const SizedBox(width: 8),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
                 _FilterPill(
-                  icon: Icons.label_outline,
-                  label: _selectedTag ?? 'All Tags',
-                  isActive: _selectedTag != null,
+                  icon: Icons.calendar_today_outlined,
+                  label: _period == _Period.custom &&
+                          _customStart != null &&
+                          _customEnd != null
+                      ? '${DateFormat('d MMM').format(_customStart!)} – ${DateFormat('d MMM').format(_customEnd!)}'
+                      : _kPeriodLabels[_period]!,
+                  isActive: _period != _Period.thisMonth,
                   color: color,
-                  onTap: () => _showTagSheet(context, tags),
+                  onTap: () => _showPeriodSheet(context),
                 ),
+                if (tags.isNotEmpty) ...[
+                  const SizedBox(width: 8),
+                  _FilterPill(
+                    icon: Icons.label_outline,
+                    label: _selectedTag ?? 'All Tags',
+                    isActive: _selectedTag != null,
+                    color: color,
+                    onTap: () => _showTagSheet(context, tags),
+                  ),
+                ],
+                if (widget.type == TransactionType.expense) ...[
+                  const SizedBox(width: 8),
+                  _FilterPill(
+                    icon: Icons.people_outline,
+                    label: 'Shared',
+                    isActive: _includeShared,
+                    color: color,
+                    showArrow: false,
+                    onTap: () => setState(() => _includeShared = !_includeShared),
+                  ),
+                ],
               ],
-            ],
+            ),
           ),
           const SizedBox(height: 16),
 
@@ -793,6 +838,7 @@ class _FilterPill extends StatelessWidget {
   final bool isActive;
   final Color color;
   final VoidCallback onTap;
+  final bool showArrow;
 
   const _FilterPill({
     required this.icon,
@@ -800,6 +846,7 @@ class _FilterPill extends StatelessWidget {
     required this.isActive,
     required this.color,
     required this.onTap,
+    this.showArrow = true,
   });
 
   @override
@@ -836,8 +883,10 @@ class _FilterPill extends StatelessWidget {
                 color: pillColor,
               ),
             ),
-            const SizedBox(width: 2),
-            Icon(Icons.keyboard_arrow_down_rounded, size: 16, color: pillColor),
+            if (showArrow) ...[
+              const SizedBox(width: 2),
+              Icon(Icons.keyboard_arrow_down_rounded, size: 16, color: pillColor),
+            ],
           ],
         ),
       ),

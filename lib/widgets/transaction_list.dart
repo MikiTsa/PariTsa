@@ -11,6 +11,7 @@ class TransactionList extends StatelessWidget {
   final TransactionType transactionType;
   final Function(String, TransactionType)? onRemoveTransaction;
   final Function(Transaction)? onEditTransaction;
+  final Future<void> Function(Transaction)? onMoveToShared;
 
   const TransactionList({
     super.key,
@@ -18,6 +19,7 @@ class TransactionList extends StatelessWidget {
     required this.transactionType,
     this.onRemoveTransaction,
     this.onEditTransaction,
+    this.onMoveToShared,
   });
 
   Color get typeColor {
@@ -392,6 +394,21 @@ class TransactionList extends StatelessWidget {
                   ),
               ],
             ),
+            if (onMoveToShared != null &&
+                !transaction.isShared &&
+                transactionType == TransactionType.expense) ...[
+              const SizedBox(height: 12),
+              const Divider(height: 1),
+              TextButton.icon(
+                onPressed: () {
+                  Navigator.pop(context);
+                  onMoveToShared!(transaction);
+                },
+                icon: const Icon(Icons.people_outline, size: 16),
+                label: const Text('Move to Shared Tracker'),
+                style: TextButton.styleFrom(foregroundColor: AppColors.primary),
+              ),
+            ],
           ],
         ),
       ),

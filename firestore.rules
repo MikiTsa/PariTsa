@@ -72,7 +72,9 @@ service cloud.firestore {
 
     function isValidSharedTracker() {
       let required = ['id', 'name', 'createdAt', 'createdBy', 'inviteCode', 'members', 'memberIds'];
+      let allowed  = ['id', 'name', 'createdAt', 'createdBy', 'inviteCode', 'members', 'memberIds', 'categories'];
       return request.resource.data.keys().hasAll(required)
+          && request.resource.data.keys().hasOnly(allowed)
           && request.resource.data.id         is string
           && request.resource.data.name       is string
           && request.resource.data.name.size() > 0
@@ -80,11 +82,15 @@ service cloud.firestore {
           && request.resource.data.createdBy  is string
           && request.resource.data.inviteCode is string
           && request.resource.data.members    is list
-          && request.resource.data.memberIds  is list;
+          && request.resource.data.memberIds  is list
+          && (
+               !request.resource.data.keys().hasAny(['categories']) ||
+               request.resource.data.categories is list
+             );
     }
 
     function isValidSharedTrackerUpdate() {
-      let allowed = ['name', 'members', 'memberIds'];
+      let allowed = ['name', 'members', 'memberIds', 'categories'];
       return request.resource.data.diff(resource.data).affectedKeys().hasOnly(allowed);
     }
 

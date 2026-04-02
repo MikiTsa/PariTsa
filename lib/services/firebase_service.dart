@@ -277,6 +277,9 @@ class FirebaseService {
 
   /// Creates a new shared tracker, writes an invite-code index document,
   /// and returns the resulting [SharedTracker].
+  ///
+  /// The tracker's category list is seeded from the creator's personal expense
+  /// categories so all members start with a vocabulary that matches the creator.
   Future<SharedTracker> createSharedTracker(String name) async {
     final uid = _currentUserId;
     if (uid == null) throw Exception('Not authenticated');
@@ -285,6 +288,10 @@ class FirebaseService {
     final displayName = user.displayName?.isNotEmpty == true
         ? user.displayName!
         : (user.email ?? 'Unknown');
+
+    // Seed from the creator's personal expense categories so the shared
+    // vocabulary aligns with their analytics buckets from day one.
+    final seedCategories = await getCategories(TransactionType.expense);
 
     final inviteCode = SharedTracker.generateInviteCode();
     final creator = TrackerMember(
@@ -299,6 +306,7 @@ class FirebaseService {
       inviteCode: inviteCode,
       members: [creator],
       memberIds: [uid],
+      categories: seedCategories,
     );
 
     final batch = _firestore.batch();
@@ -444,6 +452,19 @@ class FirebaseService {
         .update({'name': newName});
   }
 
+  /// Adds [category] to the tracker's shared category list (no-op if already present).
+  /// Uses arrayUnion so concurrent writes are safe.
+  Future<void> addCategoryToSharedTracker(
+    String trackerId,
+    String category,
+  ) async {
+    if (_currentUserId == null) throw Exception('Not authenticated');
+    await _firestore
+        .collection(kSharedTrackersCollection)
+        .doc(trackerId)
+        .update({'categories': FieldValue.arrayUnion([category])});
+  }
+
   // ── Shared Transactions ───────────────────────────────────────────────────
 
   Stream<List<SharedTransaction>> getSharedTransactionsStream(
@@ -486,6 +507,35 @@ class FirebaseService {
         .collection(kSharedTxCollection)
         .doc(txId)
         .delete();
+  }
+
+  /// Atomically creates [tx] in the shared tracker and deletes the personal
+  /// expense [personalExpenseId] from the current user's expenses collection.
+  Future<void> moveExpenseToSharedTracker(
+    String trackerId,
+    SharedTransaction tx,
+    String personalExpenseId,
+  ) async {
+    final uid = _currentUserId;
+    if (uid == null) throw Exception('Not authenticated');
+
+    final batch = _firestore.batch();
+    batch.set(
+      _firestore
+          .collection(kSharedTrackersCollection)
+          .doc(trackerId)
+          .collection(kSharedTxCollection)
+          .doc(tx.id),
+      tx.toMap(),
+    );
+    batch.delete(
+      _firestore
+          .collection(kUsersCollection)
+          .doc(uid)
+          .collection(kExpensesCollection)
+          .doc(personalExpenseId),
+    );
+    await batch.commit();
   }
 
   /// Returns a stream of the current user's shared expenses across ALL their

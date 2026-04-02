@@ -164,6 +164,7 @@ class SharedTracker {
   final String inviteCode;
   final List<TrackerMember> members;
   final List<String> memberIds; // flat list for Firestore array-contains queries
+  final List<String> categories; // shared vocabulary for all members
 
   SharedTracker({
     String? id,
@@ -173,6 +174,7 @@ class SharedTracker {
     required this.inviteCode,
     required this.members,
     required this.memberIds,
+    this.categories = const [],
   }) : id = id ?? const Uuid().v4();
 
   /// Returns the [TrackerMember] for [uid], or null if not found.
@@ -188,6 +190,7 @@ class SharedTracker {
     String? name,
     List<TrackerMember>? members,
     List<String>? memberIds,
+    List<String>? categories,
   }) {
     return SharedTracker(
       id: id,
@@ -197,6 +200,7 @@ class SharedTracker {
       inviteCode: inviteCode,
       members: members ?? this.members,
       memberIds: memberIds ?? this.memberIds,
+      categories: categories ?? this.categories,
     );
   }
 
@@ -208,11 +212,13 @@ class SharedTracker {
     'inviteCode': inviteCode,
     'members': members.map((m) => m.toMap()).toList(),
     'memberIds': memberIds,
+    'categories': categories,
   };
 
   factory SharedTracker.fromMap(Map<String, dynamic> map) {
     final rawMembers = map['members'] as List<dynamic>? ?? [];
     final rawMemberIds = map['memberIds'] as List<dynamic>? ?? [];
+    final rawCategories = map['categories'] as List<dynamic>?;
     return SharedTracker(
       id: map['id'] as String? ?? '',
       name: map['name'] as String? ?? '',
@@ -225,6 +231,8 @@ class SharedTracker {
           .map((m) => TrackerMember.fromMap(m as Map<String, dynamic>))
           .toList(),
       memberIds: rawMemberIds.cast<String>(),
+      // null → old tracker doc without categories → fall back to defaults
+      categories: rawCategories?.cast<String>() ?? [],
     );
   }
 

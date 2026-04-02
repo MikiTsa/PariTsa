@@ -1,7 +1,8 @@
 import 'dart:async';
 
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide Split;
 import 'package:flutter/services.dart';
+import 'package:expenses_tracker/models/shared_tracker.dart';
 import 'package:expenses_tracker/models/transaction.dart';
 import 'package:expenses_tracker/providers/app_settings.dart';
 import 'package:expenses_tracker/screens/expenses_screen.dart';
@@ -9,6 +10,7 @@ import 'package:expenses_tracker/screens/incomes_screen.dart';
 import 'package:expenses_tracker/screens/savings_screen.dart';
 import 'package:expenses_tracker/widgets/balance_box.dart';
 import 'package:expenses_tracker/widgets/app_drawer.dart';
+import 'package:expenses_tracker/widgets/shared_transaction_form.dart';
 import 'package:expenses_tracker/widgets/transaction_form.dart';
 import 'package:expenses_tracker/services/firebase_service.dart';
 import 'package:expenses_tracker/services/auth_service.dart';
@@ -39,6 +41,7 @@ class _HomeScreenState extends State<HomeScreen>
   List<Transaction>? incomes;
   List<Transaction>? savings;
   List<Transaction>? sharedExpenses;
+  List<SharedTracker> _sharedTrackers = [];
 
   // Nested subscriptions for shared expenses — one per shared tracker
   final Map<String, StreamSubscription<dynamic>> _sharedTxSubs = {};
@@ -149,6 +152,8 @@ class _HomeScreenState extends State<HomeScreen>
         if (!mounted) return;
         final uid = _firebaseService.currentUserId;
         if (uid == null) return;
+
+        setState(() => _sharedTrackers = trackers);
 
         final currentIds = trackers.map((t) => t.id).toSet();
 
@@ -281,6 +286,105 @@ class _HomeScreenState extends State<HomeScreen>
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(message), backgroundColor: AppColors.expense),
+    );
+  }
+
+  Future<void> _handleMoveToShared(Transaction expense) async {
+    if (_sharedTrackers.isEmpty) {
+      _showErrorSnackBar('Join or create a shared tracker first');
+      return;
+    }
+
+    final SharedTracker tracker;
+    if (_sharedTrackers.length == 1) {
+      tracker = _sharedTrackers.first;
+    } else {
+      final picked = await _showTrackerPicker();
+      if (picked == null) return;
+      tracker = picked;
+    }
+
+    if (!mounted) return;
+
+    final uid = _firebaseService.currentUserId ?? '';
+    final member = tracker.memberFor(uid);
+
+    final preFilled = SharedTransaction(
+      title: expense.title,
+      totalAmount: expense.amount,
+      date: expense.date,
+      category: expense.category,
+      note: expense.note,
+      tag: expense.tag,
+      splits: member != null
+          ? [Split(uid: member.uid, displayName: member.displayName, amount: expense.amount)]
+          : [],
+    );
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => SharedTransactionForm(
+        tracker: tracker,
+        initialTransaction: preFilled,
+        onSave: (tx) => _firebaseService.moveExpenseToSharedTracker(
+          tracker.id, tx, expense.id,
+        ),
+      ),
+    );
+  }
+
+  Future<SharedTracker?> _showTrackerPicker() {
+    return showModalBottomSheet<SharedTracker>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        decoration: BoxDecoration(
+          color: ctx.cCard,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        padding: const EdgeInsets.fromLTRB(20, 20, 20, 32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: ctx.cMutedText.withValues(alpha: 0.5),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'Move to which tracker?',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: ctx.cPrimaryText,
+              ),
+            ),
+            const SizedBox(height: 12),
+            ..._sharedTrackers.map((t) => ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: CircleAvatar(
+                backgroundColor: AppColors.primary.withValues(alpha: 0.12),
+                child: const Icon(Icons.people_outline, color: AppColors.primary, size: 20),
+              ),
+              title: Text(t.name, style: TextStyle(color: ctx.cPrimaryText, fontWeight: FontWeight.w500)),
+              subtitle: Text(
+                t.members.map((m) => m.displayName).join(', '),
+                style: TextStyle(fontSize: 12, color: ctx.cMutedText),
+              ),
+              onTap: () => Navigator.pop(ctx, t),
+            )),
+          ],
+        ),
+      ),
     );
   }
 
@@ -492,6 +596,7 @@ class _HomeScreenState extends State<HomeScreen>
                         onEditExpense: (t) =>
                             editTransaction(t, TransactionType.expense),
                         onRemoveTransaction: removeTransaction,
+                        onMoveToShared: _handleMoveToShared,
                       ),
                       IncomesScreen(
                         incomes: incomes,

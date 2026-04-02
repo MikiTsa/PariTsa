@@ -9,6 +9,7 @@ class ExpensesScreen extends StatelessWidget {
   final Function(Transaction) onAddExpense;
   final Function(Transaction) onEditExpense;
   final Function(String, TransactionType) onRemoveTransaction;
+  final Future<void> Function(Transaction)? onMoveToShared;
 
   const ExpensesScreen({
     super.key,
@@ -16,6 +17,7 @@ class ExpensesScreen extends StatelessWidget {
     required this.onAddExpense,
     required this.onEditExpense,
     required this.onRemoveTransaction,
+    this.onMoveToShared,
   });
 
   @override
@@ -32,6 +34,7 @@ class ExpensesScreen extends StatelessWidget {
                 onRemoveTransaction: onRemoveTransaction,
                 onEditTransaction:
                     (transaction) => _showEditExpenseForm(context, transaction),
+                onMoveToShared: onMoveToShared,
               ),
       floatingActionButton: FloatingActionButton(
         backgroundColor: AppColors.expense,
