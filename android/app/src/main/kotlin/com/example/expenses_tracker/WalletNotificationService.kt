@@ -3,7 +3,9 @@ package com.example.expenses_tracker
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
+import android.content.ComponentName
 import android.content.Intent
+import android.os.Build
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import android.util.Log
@@ -37,8 +39,10 @@ class WalletNotificationService : NotificationListenerService() {
         private const val NOTIF_CHANNEL_NAME = "Wallet Auto-Expense"
 
         private val WALLET_PACKAGES = setOf(
-            "com.google.android.apps.walletnfcrel",   // Google Wallet
-            "com.google.android.apps.nbu.paisa.user", // Google Pay (some regions)
+            "com.google.android.apps.walletnfcrel",   // Google Wallet (NFC, most Western markets)
+            "com.google.android.apps.wallet",         // Google Wallet (some regions/devices)
+            "com.google.android.apps.googlepay",      // Google Pay (rebranded, some markets)
+            "com.google.android.apps.nbu.paisa.user", // Google Pay (India and some Asian markets)
         )
 
         // Keywords matched case-insensitively → category "Groceries".
@@ -64,10 +68,35 @@ class WalletNotificationService : NotificationListenerService() {
         )
     }
 
+    // ── Service lifecycle ─────────────────────────────────────────────────────
+
+    override fun onListenerConnected() {
+        super.onListenerConnected()
+        Log.d(TAG, "Notification listener connected")
+    }
+
+    /**
+     * Called when the system temporarily unbinds the service (e.g. after a
+     * crash, low-memory kill, or the user toggling the permission). We
+     * immediately request a rebind so the service resumes without requiring
+     * the user to force-stop and reopen the app.
+     */
+    override fun onListenerDisconnected() {
+        super.onListenerDisconnected()
+        Log.w(TAG, "Notification listener disconnected — requesting rebind")
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            requestRebind(ComponentName(this, WalletNotificationService::class.java))
+        }
+    }
+
     // ── Notification listener ──────────────────────────────────────────────────
 
     override fun onNotificationPosted(sbn: StatusBarNotification?) {
         sbn ?: return
+        // In debug builds, log every package so mismatches are easy to diagnose.
+        if (BuildConfig.DEBUG) {
+            Log.d(TAG, "onNotificationPosted pkg=${sbn.packageName}")
+        }
         if (sbn.packageName !in WALLET_PACKAGES) return
 
         // Deduplicate: skip if we already processed this exact notification recently.
@@ -89,7 +118,11 @@ class WalletNotificationService : NotificationListenerService() {
 
         Log.d(TAG, "pkg=${sbn.packageName} title=[$title] text=[$text] bigText=[$bigText]")
 
-        val amount   = extractAmount("$title $body") ?: return
+        val amount = extractAmount("$title $body")
+        if (amount == null) {
+            Log.w(TAG, "Could not extract amount — skipping. title=[$title] body=[$body]")
+            return
+        }
         val merchant = extractMerchant(title, body)
         val category = categoryForMerchant(merchant)
 

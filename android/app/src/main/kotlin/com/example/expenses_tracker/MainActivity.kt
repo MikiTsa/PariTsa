@@ -1,8 +1,11 @@
 package com.example.expenses_tracker
 
+import android.content.ComponentName
 import android.content.Intent
+import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
+import android.service.notification.NotificationListenerService
 import io.flutter.embedding.android.FlutterFragmentActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
@@ -35,7 +38,20 @@ class MainActivity : FlutterFragmentActivity() {
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, WALLET_CHANNEL)
             .setMethodCallHandler { call, result ->
                 when (call.method) {
-                    "isPermissionGranted" -> result.success(isNotificationListenerEnabled())
+                    "isPermissionGranted" -> {
+                        val granted = isNotificationListenerEnabled()
+                        // If permission is granted, ensure the service is actually bound.
+                        // Android does not auto-bind a NotificationListenerService after the
+                        // user grants access — requestRebind() is required. Without it the
+                        // service sits in the enabled list but never receives notifications
+                        // until the user force-stops and reopens the app.
+                        if (granted && Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                            NotificationListenerService.requestRebind(
+                                ComponentName(applicationContext, WalletNotificationService::class.java)
+                            )
+                        }
+                        result.success(granted)
+                    }
                     "openPermissionSettings" -> {
                         startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
                         result.success(null)
