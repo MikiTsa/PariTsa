@@ -89,6 +89,9 @@ class SharedTransaction {
   final String? note;
   final String? tag;
   final List<Split> splits;
+  // UID of the member who originally created this transaction.
+  // Used by the Cloud Function to exclude the sender from FCM recipients.
+  final String? createdByUid;
 
   SharedTransaction({
     String? id,
@@ -99,6 +102,7 @@ class SharedTransaction {
     this.category,
     this.note,
     this.tag,
+    this.createdByUid,
   }) : id = id ?? const Uuid().v4();
 
   /// Returns the split for [uid], or null if this user has no split entry.
@@ -118,6 +122,7 @@ class SharedTransaction {
     String? category,
     String? note,
     String? tag,
+    String? createdByUid,
   }) {
     return SharedTransaction(
       id: id,
@@ -128,6 +133,7 @@ class SharedTransaction {
       category: category ?? this.category,
       note: note ?? this.note,
       tag: tag ?? this.tag,
+      createdByUid: createdByUid ?? this.createdByUid,
     );
   }
 
@@ -142,6 +148,7 @@ class SharedTransaction {
     if (category != null) map['category'] = category;
     if (note != null) map['note'] = note;
     if (tag != null) map['tag'] = tag;
+    if (createdByUid != null) map['createdByUid'] = createdByUid;
     return map;
   }
 
@@ -160,6 +167,7 @@ class SharedTransaction {
       category: map['category'] as String?,
       note: map['note'] as String?,
       tag: map['tag'] as String?,
+      createdByUid: map['createdByUid'] as String?,
     );
   }
 }

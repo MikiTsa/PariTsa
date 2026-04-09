@@ -318,85 +318,37 @@ class _SharedTransactionFormState extends State<SharedTransactionForm> {
   void _showTagDialog() {
     final tempController = TextEditingController(text: _tagCtrl.text);
 
-    showModalBottomSheet(
+    showDialog(
       context: context,
-      isScrollControlled: true,
-      backgroundColor: Theme.of(context).cardColor,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (ctx) {
-        final viewInsets = MediaQuery.of(ctx).viewInsets.bottom;
-        final maxHeight = MediaQuery.of(ctx).size.height * 0.9 - viewInsets;
-        return ConstrainedBox(
-          constraints: BoxConstraints(maxHeight: maxHeight),
-          child: SingleChildScrollView(
-            padding: EdgeInsets.only(
-              left: 20,
-              right: 20,
-              top: 20,
-              bottom: viewInsets + 20,
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-            Center(
-              child: Container(
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: AppColors.pearlAqua,
-                  borderRadius: BorderRadius.circular(10),
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'Tag (Optional)',
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-                color: context.cPrimaryText,
-              ),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: tempController,
-              autofocus: true,
-              decoration: const InputDecoration(
-                hintText: 'e.g. Vacation 2025, Side project',
-                prefixIcon: Icon(Icons.label_outline, color: AppColors.darkCyan),
-              ),
-            ),
-            const SizedBox(height: 16),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                TextButton(
-                  onPressed: () {
-                    setState(() => _tagCtrl.text = '');
-                    Navigator.pop(ctx);
-                  },
-                  child: const Text('Clear'),
-                ),
-                const SizedBox(width: 8),
-                TextButton(
-                  onPressed: () {
-                    setState(() => _tagCtrl.text = tempController.text.trim());
-                    Navigator.pop(ctx);
-                  },
-                  style: TextButton.styleFrom(foregroundColor: AppColors.primary),
-                  child: const Text('Done'),
-                ),
-              ],
-            ),
-          ],
+      builder: (ctx) => AlertDialog(
+        title: const Text('Tag (Optional)'),
+        content: TextField(
+          controller: tempController,
+          autofocus: true,
+          decoration: const InputDecoration(
+            hintText: 'e.g. Vacation 2025, Side project',
+            prefixIcon: Icon(Icons.label_outline, color: AppColors.darkCyan),
+          ),
         ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              setState(() => _tagCtrl.text = '');
+              Navigator.pop(ctx);
+            },
+            child: const Text('Clear'),
+          ),
+          TextButton(
+            onPressed: () {
+              setState(() => _tagCtrl.text = tempController.text.trim());
+              Navigator.pop(ctx);
+            },
+            style: TextButton.styleFrom(foregroundColor: AppColors.primary),
+            child: const Text('Done'),
+          ),
+        ],
       ),
     );
-  },
-);
   }
 
   Future<void> _pickDate() async {
@@ -449,6 +401,10 @@ class _SharedTransactionFormState extends State<SharedTransactionForm> {
       category: _category,
       note: _noteCtrl.text.trim().isEmpty ? null : _noteCtrl.text.trim(),
       tag: _tagCtrl.text.trim().isEmpty ? null : _tagCtrl.text.trim(),
+      // On new transactions, stamp the sender's UID so the Cloud Function
+      // knows who to exclude from FCM notifications.
+      // On edits, preserve the original creator (notifications are not sent on update).
+      createdByUid: widget.initialTransaction?.createdByUid ?? _currentUserUid,
     );
 
     widget.onSave(tx);

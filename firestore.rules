@@ -104,7 +104,7 @@ service cloud.firestore {
 
     function isValidSharedTransaction() {
       let required = ['id', 'title', 'totalAmount', 'date', 'splits'];
-      let allowed  = ['id', 'title', 'totalAmount', 'date', 'splits', 'category', 'note', 'tag'];
+      let allowed  = ['id', 'title', 'totalAmount', 'date', 'splits', 'category', 'note', 'tag', 'createdByUid'];
       return request.resource.data.keys().hasAll(required)
           && request.resource.data.keys().hasOnly(allowed)
           && request.resource.data.id          is string
@@ -125,6 +125,10 @@ service cloud.firestore {
           && (
                !request.resource.data.keys().hasAny(['tag']) ||
                request.resource.data.tag is string
+             )
+          && (
+               !request.resource.data.keys().hasAny(['createdByUid']) ||
+               request.resource.data.createdByUid is string
              );
     }
 
@@ -160,6 +164,11 @@ service cloud.firestore {
       match /categories/{categoryDocId} {
         allow read: if isOwner(userId);
         allow write: if isOwner(userId) && isValidCategoryData();
+      }
+
+      // FCM TOKENS subcollection — device push tokens, written by the device owner only
+      match /fcmTokens/{tokenId} {
+        allow read, write: if isOwner(userId);
       }
     }
 
