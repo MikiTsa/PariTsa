@@ -509,6 +509,123 @@ class FirebaseService {
         .delete();
   }
 
+  /// Batch-deletes multiple personal transactions in a single Firestore write.
+  Future<void> deleteTransactions(
+      List<String> ids, TransactionType type) async {
+    final uid = _currentUserId;
+    if (uid == null) throw Exception('Not authenticated');
+    final collection = _getCollection(type);
+    if (collection == null) throw Exception('Failed to get collection');
+    final batch = _firestore.batch();
+    for (final id in ids) {
+      batch.delete(collection.doc(id));
+    }
+    await batch.commit();
+  }
+
+  /// Batch-moves [expenses] to a shared tracker without showing the split form.
+  /// Each expense becomes a SharedTransaction with only the current user's split
+  /// set to the full amount. The original personal expense documents are deleted
+  /// atomically in the same batch.
+  Future<void> moveExpensesToSharedTracker(
+    String trackerId,
+    List<Transaction> expenses,
+  ) async {
+    final uid = _currentUserId;
+    if (uid == null) throw Exception('Not authenticated');
+
+    final trackerDoc = await _firestore
+        .collection(kSharedTrackersCollection)
+        .doc(trackerId)
+        .get();
+    if (!trackerDoc.exists) throw Exception('Tracker not found');
+
+    final tracker = SharedTracker.fromFirestore(trackerDoc);
+    final member = tracker.memberFor(uid);
+    if (member == null) throw Exception('Not a member of this tracker');
+
+    final batch = _firestore.batch();
+    for (final expense in expenses) {
+      if (expense.isShared) continue; // skip already-shared items
+      final sharedTx = SharedTransaction(
+        title: expense.title,
+        totalAmount: expense.amount,
+        date: expense.date,
+        category: expense.category,
+        note: expense.note,
+        tag: expense.tag,
+        splits: [
+          Split(
+            uid: member.uid,
+            displayName: member.displayName,
+            amount: expense.amount,
+          ),
+        ],
+        createdByUid: uid,
+      );
+      batch.set(
+        _firestore
+            .collection(kSharedTrackersCollection)
+            .doc(trackerId)
+            .collection(kSharedTxCollection)
+            .doc(sharedTx.id),
+        sharedTx.toMap(),
+      );
+      batch.delete(
+        _firestore
+            .collection(kUsersCollection)
+            .doc(uid)
+            .collection(kExpensesCollection)
+            .doc(expense.id),
+      );
+    }
+    await batch.commit();
+  }
+
+  /// Moves a shared transaction to the current user's personal expenses.
+  ///
+  /// The full [tx.totalAmount] is written as a personal expense (not just the
+  /// user's split), then the shared transaction is deleted from the tracker so
+  /// it disappears for all members.
+  Future<void> moveSharedExpenseToPersonal(
+    String trackerId,
+    SharedTransaction tx,
+  ) async {
+    final uid = _currentUserId;
+    if (uid == null) throw Exception('Not authenticated');
+
+    // Use the user's personal analytics category if set, otherwise the shared one.
+    final userSplit = tx.splitFor(uid);
+    final category = userSplit?.myCategory ?? tx.category;
+
+    final newExpense = Transaction(
+      title: tx.title,
+      amount: tx.totalAmount,
+      date: tx.date,
+      category: category,
+      note: tx.note,
+      tag: tx.tag,
+    );
+
+    final batch = _firestore.batch();
+    batch.set(
+      _firestore
+          .collection(kUsersCollection)
+          .doc(uid)
+          .collection(kExpensesCollection)
+          .doc(newExpense.id),
+      newExpense.toMap(),
+    );
+    batch.delete(
+      _firestore
+          .collection(kSharedTrackersCollection)
+          .doc(trackerId)
+          .collection(kSharedTxCollection)
+          .doc(tx.id),
+    );
+    await batch.commit();
+  }
+
   /// Atomically creates [tx] in the shared tracker and deletes the personal
   /// expense [personalExpenseId] from the current user's expenses collection.
   Future<void> moveExpenseToSharedTracker(
