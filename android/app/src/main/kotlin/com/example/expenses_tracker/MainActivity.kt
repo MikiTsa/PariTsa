@@ -56,6 +56,14 @@ class MainActivity : FlutterFragmentActivity() {
                         startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
                         result.success(null)
                     }
+                    // Debug-only: posts a real notification from this app that the
+                    // WalletNotificationService will intercept (our package is in
+                    // WALLET_PACKAGES in debug builds). This tests the full Kotlin
+                    // pipeline without needing a real Google Wallet payment.
+                    "testWalletNotification" -> {
+                        if (BuildConfig.DEBUG) postTestWalletNotification()
+                        result.success(null)
+                    }
                     else -> result.notImplemented()
                 }
             }
@@ -76,6 +84,18 @@ class MainActivity : FlutterFragmentActivity() {
             }
     }
 
+    // Re-bind the wallet notification listener on every resume so the service
+    // reconnects after being killed, after permission is re-granted, or after
+    // the app is updated with new libraries.
+    override fun onResume() {
+        super.onResume()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N && isNotificationListenerEnabled()) {
+            NotificationListenerService.requestRebind(
+                ComponentName(applicationContext, WalletNotificationService::class.java)
+            )
+        }
+    }
+
     // Warm-resume path: the activity is already running; Android calls onNewIntent
     // BEFORE onResume, so by the time Flutter fires AppLifecycleState.resumed the
     // action is already stored and checkLaunchAction will find it.
@@ -85,6 +105,38 @@ class MainActivity : FlutterFragmentActivity() {
         intent.getStringExtra(AddTransactionWidget.EXTRA_ACTION)?.let {
             pendingWidgetAction = it
         }
+    }
+
+    private fun postTestWalletNotification() {
+        val nm = getSystemService(NOTIFICATION_SERVICE) as android.app.NotificationManager
+        val channelId = "wallet_test_trigger"
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            nm.createNotificationChannel(
+                android.app.NotificationChannel(
+                    channelId, "Wallet Pipeline Test",
+                    android.app.NotificationManager.IMPORTANCE_DEFAULT,
+                )
+            )
+        }
+        val openIntent = Intent(this, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
+        }
+        val pi = android.app.PendingIntent.getActivity(
+            this, 0, openIntent,
+            android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE,
+        )
+        val notification = androidx.core.app.NotificationCompat.Builder(this, channelId)
+            .setSmallIcon(R.mipmap.ic_launcher)
+            .setContentTitle("Google Pay")
+            .setContentText("You paid \u20ac52.43 at Lidl")
+            .setStyle(
+                androidx.core.app.NotificationCompat.BigTextStyle()
+                    .bigText("You paid \u20ac52.43 at Lidl \u00b7 Groceries")
+            )
+            .setContentIntent(pi)
+            .setAutoCancel(true)
+            .build()
+        nm.notify(System.currentTimeMillis().toInt(), notification)
     }
 
     private fun isNotificationListenerEnabled(): Boolean {

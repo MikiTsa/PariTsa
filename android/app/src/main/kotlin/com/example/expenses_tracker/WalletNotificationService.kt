@@ -38,12 +38,16 @@ class WalletNotificationService : NotificationListenerService() {
         private const val NOTIF_CHANNEL_ID = "wallet_auto_expense"
         private const val NOTIF_CHANNEL_NAME = "Wallet Auto-Expense"
 
-        private val WALLET_PACKAGES = setOf(
-            "com.google.android.apps.walletnfcrel",   // Google Wallet (NFC, most Western markets)
-            "com.google.android.apps.wallet",         // Google Wallet (some regions/devices)
-            "com.google.android.apps.googlepay",      // Google Pay (rebranded, some markets)
-            "com.google.android.apps.nbu.paisa.user", // Google Pay (India and some Asian markets)
-        )
+        // In debug builds, also accept our own package so the test button in
+        // HomeScreen can fire a real notification that goes through this exact
+        // pipeline — proving the service is alive without needing a real payment.
+        private val WALLET_PACKAGES: Set<String> = buildSet {
+            add("com.google.android.apps.walletnfcrel")   // Google Wallet (NFC, most Western markets)
+            add("com.google.android.apps.wallet")         // Google Wallet (some regions/devices)
+            add("com.google.android.apps.googlepay")      // Google Pay (rebranded, some markets)
+            add("com.google.android.apps.nbu.paisa.user") // Google Pay (India and some Asian markets)
+            if (BuildConfig.DEBUG) add("com.example.expenses_tracker")
+        }
 
         // Keywords matched case-insensitively → category "Groceries".
         private val GROCERY_KEYWORDS = listOf("lidl", "spar", "hofer", "mercator")
@@ -98,6 +102,16 @@ class WalletNotificationService : NotificationListenerService() {
             Log.d(TAG, "onNotificationPosted pkg=${sbn.packageName}")
         }
         if (sbn.packageName !in WALLET_PACKAGES) return
+
+        // Guard against a feedback loop in debug mode: our package is in
+        // WALLET_PACKAGES so the service would otherwise re-process its own
+        // confirmation notifications endlessly. Only allow our own
+        // "wallet_test_trigger" channel through; ignore everything else we post.
+        if (sbn.packageName == packageName) {
+            val channelId = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
+                sbn.notification?.channelId else null
+            if (channelId != "wallet_test_trigger") return
+        }
 
         // Deduplicate: skip if we already processed this exact notification recently.
         val now = System.currentTimeMillis()

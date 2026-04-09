@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:expenses_tracker/providers/app_settings.dart';
 import 'package:expenses_tracker/services/biometric_service.dart';
@@ -801,80 +803,103 @@ class _WalletRowState extends State<_WalletRow> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      onTap: _service.openPermissionSettings,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        child: Row(
-          children: [
-            Container(
-              width: 36,
-              height: 36,
-              decoration: BoxDecoration(
-                color: AppColors.primary.withValues(alpha: 0.10),
-                borderRadius: BorderRadius.circular(9),
-              ),
-              child: Icon(Icons.wallet, color: AppColors.primary, size: 20),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        InkWell(
+          onTap: _service.openPermissionSettings,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            child: Row(
+              children: [
+                Container(
+                  width: 36,
+                  height: 36,
+                  decoration: BoxDecoration(
+                    color: AppColors.primary.withValues(alpha: 0.10),
+                    borderRadius: BorderRadius.circular(9),
+                  ),
+                  child: Icon(Icons.wallet, color: AppColors.primary, size: 20),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Google Wallet',
+                        style: TextStyle(
+                          fontSize: 15,
+                          color: context.cPrimaryText,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        'Auto-capture payment notifications',
+                        style: TextStyle(fontSize: 12, color: context.cMutedText),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: _granted
+                        ? Colors.green.withValues(alpha: 0.12)
+                        : AppColors.expense.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        _granted ? Icons.check_circle_outline : Icons.block_outlined,
+                        size: 13,
+                        color: _granted ? Colors.green : AppColors.expense,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        _granted ? 'Granted' : 'Not granted',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: _granted ? Colors.green : AppColors.expense,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 2),
+                Icon(Icons.chevron_right, color: context.cMutedText, size: 20),
+              ],
             ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Google Wallet',
-                    style: TextStyle(
-                      fontSize: 15,
-                      color: context.cPrimaryText,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    'Auto-capture payment notifications',
-                    style:
-                        TextStyle(fontSize: 12, color: context.cMutedText),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 8),
-            Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              decoration: BoxDecoration(
-                color: _granted
-                    ? Colors.green.withValues(alpha: 0.12)
-                    : AppColors.expense.withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    _granted
-                        ? Icons.check_circle_outline
-                        : Icons.block_outlined,
-                    size: 13,
-                    color: _granted ? Colors.green : AppColors.expense,
-                  ),
-                  const SizedBox(width: 4),
-                  Text(
-                    _granted ? 'Granted' : 'Not granted',
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: _granted ? Colors.green : AppColors.expense,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 2),
-            Icon(Icons.chevron_right, color: context.cMutedText, size: 20),
-          ],
+          ),
         ),
-      ),
+        // Xiaomi/MIUI devices reset the Autostart permission after every app
+        // update, which silently kills the notification listener service even
+        // when notification access is granted.
+        if (_granted && Platform.isAndroid)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(Icons.info_outline, size: 13, color: context.cMutedText),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    'Xiaomi/MIUI only: also enable Autostart — '
+                    'Settings → Apps → Permissions → Background Autostart → PariTsa'
+                    'MIUI resets this after every app update.',
+                    style: TextStyle(fontSize: 11, color: context.cMutedText),
+                  ),
+                ),
+              ],
+            ),
+          ),
+      ],
     );
   }
 }
