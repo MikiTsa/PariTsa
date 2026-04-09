@@ -4,11 +4,13 @@ import 'package:expenses_tracker/widgets/transaction_form.dart';
 import 'package:expenses_tracker/widgets/transaction_list.dart';
 import 'package:expenses_tracker/theme/app_colors.dart';
 
-class SavingsScreen extends StatelessWidget {
+class SavingsScreen extends StatefulWidget {
   final List<Transaction>? savings;
   final Function(Transaction) onAddSaving;
   final Function(Transaction) onEditSaving;
   final Function(String, TransactionType) onRemoveTransaction;
+  final Future<void> Function(List<String>)? onRemoveMultiple;
+  final void Function(bool)? onSelectionModeChanged;
 
   const SavingsScreen({
     super.key,
@@ -16,29 +18,45 @@ class SavingsScreen extends StatelessWidget {
     required this.onAddSaving,
     required this.onEditSaving,
     required this.onRemoveTransaction,
+    this.onRemoveMultiple,
+    this.onSelectionModeChanged,
   });
+
+  @override
+  State<SavingsScreen> createState() => _SavingsScreenState();
+}
+
+class _SavingsScreenState extends State<SavingsScreen> {
+  bool _isSelecting = false;
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       body:
-          savings == null
+          widget.savings == null
               ? const Center(child: CircularProgressIndicator())
-              : savings!.isEmpty
+              : widget.savings!.isEmpty
               ? _buildEmptyState()
               : TransactionList(
-                transactions: savings!,
+                transactions: widget.savings!,
                 transactionType: TransactionType.saving,
-                onRemoveTransaction: onRemoveTransaction,
+                onRemoveTransaction: widget.onRemoveTransaction,
                 onEditTransaction:
                     (transaction) => _showEditSavingForm(context, transaction),
+                onRemoveMultiple: widget.onRemoveMultiple,
+                onSelectionModeChanged: (selecting) {
+                  setState(() => _isSelecting = selecting);
+                  widget.onSelectionModeChanged?.call(selecting);
+                },
               ),
-      floatingActionButton: FloatingActionButton(
-        backgroundColor: AppColors.saving,
-        foregroundColor: Colors.white,
-        onPressed: () => _showAddSavingForm(context),
-        child: const Icon(Icons.add),
-      ),
+      floatingActionButton: _isSelecting
+          ? null
+          : FloatingActionButton(
+              backgroundColor: AppColors.saving,
+              foregroundColor: Colors.white,
+              onPressed: () => _showAddSavingForm(context),
+              child: const Icon(Icons.add),
+            ),
     );
   }
 
@@ -80,7 +98,7 @@ class SavingsScreen extends StatelessWidget {
       builder:
           (context) => TransactionForm(
             transactionType: TransactionType.saving,
-            onSave: onAddSaving,
+            onSave: widget.onAddSaving,
           ),
     );
   }
@@ -94,7 +112,7 @@ class SavingsScreen extends StatelessWidget {
           (context) => TransactionForm(
             transactionType: TransactionType.saving,
             initialTransaction: transaction,
-            onSave: onEditSaving,
+            onSave: widget.onEditSaving,
           ),
     );
   }

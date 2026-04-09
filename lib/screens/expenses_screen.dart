@@ -4,12 +4,15 @@ import 'package:expenses_tracker/widgets/transaction_form.dart';
 import 'package:expenses_tracker/widgets/transaction_list.dart';
 import 'package:expenses_tracker/theme/app_colors.dart';
 
-class ExpensesScreen extends StatelessWidget {
+class ExpensesScreen extends StatefulWidget {
   final List<Transaction>? expenses;
   final Function(Transaction) onAddExpense;
   final Function(Transaction) onEditExpense;
   final Function(String, TransactionType) onRemoveTransaction;
   final Future<void> Function(Transaction)? onMoveToShared;
+  final Future<void> Function(List<String>)? onRemoveMultiple;
+  final Future<void> Function(List<Transaction>)? onMoveMultipleToShared;
+  final void Function(bool)? onSelectionModeChanged;
 
   const ExpensesScreen({
     super.key,
@@ -18,30 +21,48 @@ class ExpensesScreen extends StatelessWidget {
     required this.onEditExpense,
     required this.onRemoveTransaction,
     this.onMoveToShared,
+    this.onRemoveMultiple,
+    this.onMoveMultipleToShared,
+    this.onSelectionModeChanged,
   });
+
+  @override
+  State<ExpensesScreen> createState() => _ExpensesScreenState();
+}
+
+class _ExpensesScreenState extends State<ExpensesScreen> {
+  bool _isSelecting = false;
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       body:
-          expenses == null
+          widget.expenses == null
               ? const Center(child: CircularProgressIndicator())
-              : expenses!.isEmpty
+              : widget.expenses!.isEmpty
               ? _buildEmptyState()
               : TransactionList(
-                transactions: expenses!,
+                transactions: widget.expenses!,
                 transactionType: TransactionType.expense,
-                onRemoveTransaction: onRemoveTransaction,
+                onRemoveTransaction: widget.onRemoveTransaction,
                 onEditTransaction:
                     (transaction) => _showEditExpenseForm(context, transaction),
-                onMoveToShared: onMoveToShared,
+                onMoveToShared: widget.onMoveToShared,
+                onRemoveMultiple: widget.onRemoveMultiple,
+                onMoveMultipleToShared: widget.onMoveMultipleToShared,
+                onSelectionModeChanged: (selecting) {
+                  setState(() => _isSelecting = selecting);
+                  widget.onSelectionModeChanged?.call(selecting);
+                },
               ),
-      floatingActionButton: FloatingActionButton(
-        backgroundColor: AppColors.expense,
-        foregroundColor: Colors.white,
-        onPressed: () => _showAddExpenseForm(context),
-        child: const Icon(Icons.add),
-      ),
+      floatingActionButton: _isSelecting
+          ? null
+          : FloatingActionButton(
+              backgroundColor: AppColors.expense,
+              foregroundColor: Colors.white,
+              onPressed: () => _showAddExpenseForm(context),
+              child: const Icon(Icons.add),
+            ),
     );
   }
 
@@ -83,7 +104,7 @@ class ExpensesScreen extends StatelessWidget {
       builder:
           (context) => TransactionForm(
             transactionType: TransactionType.expense,
-            onSave: onAddExpense,
+            onSave: widget.onAddExpense,
           ),
     );
   }
@@ -97,7 +118,7 @@ class ExpensesScreen extends StatelessWidget {
           (context) => TransactionForm(
             transactionType: TransactionType.expense,
             initialTransaction: transaction,
-            onSave: onEditExpense,
+            onSave: widget.onEditExpense,
           ),
     );
   }

@@ -14,7 +14,6 @@ import 'package:expenses_tracker/widgets/shared_transaction_form.dart';
 import 'package:expenses_tracker/widgets/transaction_form.dart';
 import 'package:expenses_tracker/services/firebase_service.dart';
 import 'package:expenses_tracker/services/auth_service.dart';
-import 'package:expenses_tracker/services/local_notification_service.dart';
 import 'package:expenses_tracker/theme/app_colors.dart';
 import 'package:expenses_tracker/theme/theme_extensions.dart';
 
@@ -42,6 +41,7 @@ class _HomeScreenState extends State<HomeScreen>
   List<Transaction>? savings;
   List<Transaction>? sharedExpenses;
   List<SharedTracker> _sharedTrackers = [];
+  bool _isSelectingInList = false;
 
   // Nested subscriptions for shared expenses — one per shared tracker
   final Map<String, StreamSubscription<dynamic>> _sharedTxSubs = {};
@@ -289,6 +289,55 @@ class _HomeScreenState extends State<HomeScreen>
     );
   }
 
+  Future<void> _removeMultipleTransactions(
+    List<String> ids,
+    TransactionType type,
+  ) async {
+    // Filter out shared expenses — they can't be deleted from the personal list
+    final sharedIds = (sharedExpenses ?? []).map((e) => e.id).toSet();
+    final deletable = ids.where((id) => !sharedIds.contains(id)).toList();
+    if (deletable.isEmpty) {
+      _showErrorSnackBar('Shared expenses cannot be deleted from here');
+      return;
+    }
+    try {
+      await _firebaseService.deleteTransactions(deletable, type);
+    } catch (e) {
+      _showErrorSnackBar('Failed to delete transactions');
+    }
+  }
+
+  Future<void> _handleMoveMultipleToShared(List<Transaction> expenses) async {
+    // Strip out shared expenses — they're already in a shared tracker
+    final personal = expenses
+        .where((e) => e.sharedTrackerId == null)
+        .toList();
+    if (personal.isEmpty) {
+      _showErrorSnackBar('All selected expenses are already shared');
+      return;
+    }
+    if (_sharedTrackers.isEmpty) {
+      _showErrorSnackBar('Join or create a shared tracker first');
+      return;
+    }
+
+    final SharedTracker tracker;
+    if (_sharedTrackers.length == 1) {
+      tracker = _sharedTrackers.first;
+    } else {
+      final picked = await _showTrackerPicker();
+      if (picked == null) return;
+      tracker = picked;
+    }
+    if (!mounted) return;
+
+    try {
+      await _firebaseService.moveExpensesToSharedTracker(tracker.id, personal);
+    } catch (e) {
+      _showErrorSnackBar('Failed to move expenses to shared tracker');
+    }
+  }
+
   Future<void> _handleMoveToShared(Transaction expense) async {
     if (_sharedTrackers.isEmpty) {
       _showErrorSnackBar('Join or create a shared tracker first');
@@ -471,32 +520,36 @@ class _HomeScreenState extends State<HomeScreen>
                           Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              // Wallet test trigger — visible only in debug builds.
+                              // Wallet pipeline test — debug builds only.
+                              // Posts a real notification from this app; the
+                              // WalletNotificationService intercepts it and writes
+                              // the expense to Firestore exactly as a real Google
+                              // Wallet payment would. If the expense does NOT appear
+                              // the service is not running (fix: enable Autostart on
+                              // Xiaomi, or check notification-listener permission).
                               if (const bool.fromEnvironment('dart.vm.product') == false)
                                 IconButton(
                                   onPressed: () async {
-                                    const title    = 'Lidl Slovenija d o o';
-                                    const amount   = 52.43;
-                                    const category = 'Groceries';
-                                    await addTransaction(
-                                      Transaction(
-                                        title: title,
-                                        amount: amount,
-                                        date: DateTime.now(),
-                                        category: category,
-                                        note: 'Auto-captured from Google Wallet',
-                                      ),
-                                      TransactionType.expense,
-                                    );
-                                    await LocalNotificationService.instance
-                                        .showExpenseAdded(
-                                      title: title,
-                                      amount: amount,
-                                      category: category,
-                                    );
+                                    final messenger = ScaffoldMessenger.of(context);
+                                    try {
+                                      await const MethodChannel(
+                                        'com.example.expenses_tracker/wallet_permission',
+                                      ).invokeMethod<void>('testWalletNotification');
+                                      if (!mounted) return;
+                                      messenger.showSnackBar(
+                                        const SnackBar(
+                                          content: Text(
+                                            'Test notification posted — expense should appear automatically if the service is running',
+                                          ),
+                                          duration: Duration(seconds: 4),
+                                        ),
+                                      );
+                                    } catch (e) {
+                                      debugPrint('testWalletNotification: $e');
+                                    }
                                   },
                                   icon: const Icon(Icons.wallet),
-                                  tooltip: 'Test wallet notification',
+                                  tooltip: 'Test wallet pipeline (full Kotlin path)',
                                   color: AppColors.income,
                                 ),
                               IconButton(
@@ -597,6 +650,12 @@ class _HomeScreenState extends State<HomeScreen>
                             editTransaction(t, TransactionType.expense),
                         onRemoveTransaction: removeTransaction,
                         onMoveToShared: _handleMoveToShared,
+                        onRemoveMultiple: (ids) => _removeMultipleTransactions(
+                          ids, TransactionType.expense,
+                        ),
+                        onMoveMultipleToShared: _handleMoveMultipleToShared,
+                        onSelectionModeChanged: (v) =>
+                            setState(() => _isSelectingInList = v),
                       ),
                       IncomesScreen(
                         incomes: incomes,
@@ -605,6 +664,11 @@ class _HomeScreenState extends State<HomeScreen>
                         onEditIncome: (t) =>
                             editTransaction(t, TransactionType.income),
                         onRemoveTransaction: removeTransaction,
+                        onRemoveMultiple: (ids) => _removeMultipleTransactions(
+                          ids, TransactionType.income,
+                        ),
+                        onSelectionModeChanged: (v) =>
+                            setState(() => _isSelectingInList = v),
                       ),
                       SavingsScreen(
                         savings: savings,
@@ -613,6 +677,11 @@ class _HomeScreenState extends State<HomeScreen>
                         onEditSaving: (t) =>
                             editTransaction(t, TransactionType.saving),
                         onRemoveTransaction: removeTransaction,
+                        onRemoveMultiple: (ids) => _removeMultipleTransactions(
+                          ids, TransactionType.saving,
+                        ),
+                        onSelectionModeChanged: (v) =>
+                            setState(() => _isSelectingInList = v),
                       ),
 
                     ],
@@ -621,23 +690,25 @@ class _HomeScreenState extends State<HomeScreen>
               ],
             ),
 
-            // Floating balance box — AnimatedBuilder redraws on every animation
-            // frame so the colour interpolates continuously during swipe/tap.
-            Positioned(
-              left: 16,
-              bottom: 20,
-              child: AnimatedBuilder(
-                animation: tabCtrl.animation!,
-                builder: (context, _) {
-                  final animIdx = tabCtrl.animation!.value.round().clamp(0, 2);
-                  return BalanceBox(
-                    amount: animIdx == 2 ? totalSavings : currentBalance,
-                    isSavings: animIdx == 2,
-                    baseColor: _interpolateTabColor(tabCtrl.animation!.value),
-                  );
-                },
+            // Floating balance box — hidden during multi-select to avoid
+            // overlapping the action bar. AnimatedBuilder redraws on every
+            // animation frame so the colour interpolates during swipe/tap.
+            if (!_isSelectingInList)
+              Positioned(
+                left: 16,
+                bottom: 20,
+                child: AnimatedBuilder(
+                  animation: tabCtrl.animation!,
+                  builder: (context, _) {
+                    final animIdx = tabCtrl.animation!.value.round().clamp(0, 2);
+                    return BalanceBox(
+                      amount: animIdx == 2 ? totalSavings : currentBalance,
+                      isSavings: animIdx == 2,
+                      baseColor: _interpolateTabColor(tabCtrl.animation!.value),
+                    );
+                  },
+                ),
               ),
-            ),
           ],
         ),
       ),

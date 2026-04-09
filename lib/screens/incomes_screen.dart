@@ -4,11 +4,13 @@ import 'package:expenses_tracker/widgets/transaction_form.dart';
 import 'package:expenses_tracker/widgets/transaction_list.dart';
 import 'package:expenses_tracker/theme/app_colors.dart';
 
-class IncomesScreen extends StatelessWidget {
+class IncomesScreen extends StatefulWidget {
   final List<Transaction>? incomes;
   final Function(Transaction) onAddIncome;
   final Function(Transaction) onEditIncome;
   final Function(String, TransactionType) onRemoveTransaction;
+  final Future<void> Function(List<String>)? onRemoveMultiple;
+  final void Function(bool)? onSelectionModeChanged;
 
   const IncomesScreen({
     super.key,
@@ -16,29 +18,45 @@ class IncomesScreen extends StatelessWidget {
     required this.onAddIncome,
     required this.onEditIncome,
     required this.onRemoveTransaction,
+    this.onRemoveMultiple,
+    this.onSelectionModeChanged,
   });
+
+  @override
+  State<IncomesScreen> createState() => _IncomesScreenState();
+}
+
+class _IncomesScreenState extends State<IncomesScreen> {
+  bool _isSelecting = false;
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       body:
-          incomes == null
+          widget.incomes == null
               ? const Center(child: CircularProgressIndicator())
-              : incomes!.isEmpty
+              : widget.incomes!.isEmpty
               ? _buildEmptyState()
               : TransactionList(
-                transactions: incomes!,
+                transactions: widget.incomes!,
                 transactionType: TransactionType.income,
-                onRemoveTransaction: onRemoveTransaction,
+                onRemoveTransaction: widget.onRemoveTransaction,
                 onEditTransaction:
                     (transaction) => _showEditIncomeForm(context, transaction),
+                onRemoveMultiple: widget.onRemoveMultiple,
+                onSelectionModeChanged: (selecting) {
+                  setState(() => _isSelecting = selecting);
+                  widget.onSelectionModeChanged?.call(selecting);
+                },
               ),
-      floatingActionButton: FloatingActionButton(
-        backgroundColor: AppColors.income,
-        foregroundColor: Colors.white,
-        onPressed: () => _showAddIncomeForm(context),
-        child: const Icon(Icons.add),
-      ),
+      floatingActionButton: _isSelecting
+          ? null
+          : FloatingActionButton(
+              backgroundColor: AppColors.income,
+              foregroundColor: Colors.white,
+              onPressed: () => _showAddIncomeForm(context),
+              child: const Icon(Icons.add),
+            ),
     );
   }
 
@@ -80,7 +98,7 @@ class IncomesScreen extends StatelessWidget {
       builder:
           (context) => TransactionForm(
             transactionType: TransactionType.income,
-            onSave: onAddIncome,
+            onSave: widget.onAddIncome,
           ),
     );
   }
@@ -94,7 +112,7 @@ class IncomesScreen extends StatelessWidget {
           (context) => TransactionForm(
             transactionType: TransactionType.income,
             initialTransaction: transaction,
-            onSave: onEditIncome,
+            onSave: widget.onEditIncome,
           ),
     );
   }
