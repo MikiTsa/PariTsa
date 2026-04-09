@@ -100,6 +100,39 @@ class _SharedTrackerDetailScreenState
     );
   }
 
+  void _confirmMoveToPersonal(SharedTransaction tx) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Move to personal expenses?'),
+        content: Text(
+          'The full amount of "${tx.title}" will be added to your personal expenses '
+          'and removed from this tracker for all members.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              _service.moveSharedExpenseToPersonal(widget.trackerId, tx).catchError((e) {
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Failed to move expense: $e')),
+                  );
+                }
+              });
+            },
+            style: FilledButton.styleFrom(backgroundColor: AppColors.primary),
+            child: const Text('Move'),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _confirmDeleteTransaction(SharedTransaction tx) {
     showDialog(
       context: context,
@@ -230,6 +263,17 @@ class _SharedTrackerDetailScreenState
                   label: const Text('Delete'),
                   style: TextButton.styleFrom(
                       foregroundColor: AppColors.deleteAction),
+                ),
+                const SizedBox(width: 8),
+                TextButton.icon(
+                  onPressed: () {
+                    Navigator.pop(context);
+                    _confirmMoveToPersonal(tx);
+                  },
+                  icon: const Icon(Icons.move_down_outlined, size: 18),
+                  label: const Text('Personal'),
+                  style: TextButton.styleFrom(
+                      foregroundColor: AppColors.primary),
                 ),
                 const SizedBox(width: 8),
                 FilledButton.icon(
