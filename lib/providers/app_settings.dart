@@ -46,12 +46,13 @@ class AppSettings extends ChangeNotifier {
 
   // ── Formatting helpers ─────────────────────────────────────────────────────
 
+  // The minus sign goes before the symbol: −€12.50, not €-12.50.
   String formatAmount(double amount) =>
-      '$currencySymbol${amount.toStringAsFixed(2)}';
+      '${amount < 0 ? '−' : ''}$currencySymbol${amount.abs().toStringAsFixed(2)}';
 
   String formatAmountFull(double amount) {
     final fmt = NumberFormat('#,##0.00');
-    return '$currencySymbol${fmt.format(amount)}';
+    return '${amount < 0 ? '−' : ''}$currencySymbol${fmt.format(amount.abs())}';
   }
 
   String formatDate(DateTime date) {

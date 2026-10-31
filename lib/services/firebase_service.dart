@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart' hide Transaction;
+import 'package:expenses_tracker/models/balance_reset.dart';
 import 'package:expenses_tracker/models/shared_tracker.dart';
 import 'package:expenses_tracker/models/transaction.dart';
 import 'package:expenses_tracker/theme/app_colors.dart';
@@ -17,6 +18,7 @@ const kCategoriesCollection     = 'categories';
 const kSharedTrackersCollection = 'sharedTrackers';
 const kSharedTxCollection       = 'transactions';
 const kInviteCodesCollection    = 'inviteCodes';
+const kResetsCollection         = 'resets';
 
 // Default categories per transaction type
 const _kDefaultExpenseCategories = [
@@ -154,6 +156,51 @@ class FirebaseService {
           .map((doc) => Transaction.fromFirestore(doc))
           .toList();
     });
+  }
+
+  // ── Balance / savings resets ──────────────────────────────────────────────
+
+  CollectionReference? get _resetsCollection {
+    if (_currentUserId == null) return null;
+    return _firestore
+        .collection(kUsersCollection)
+        .doc(_currentUserId)
+        .collection(kResetsCollection);
+  }
+
+  /// All reset points for the current user, newest first.
+  Stream<List<BalanceReset>> getResetsStream() {
+    final collection = _resetsCollection;
+    if (collection == null) return Stream.value([]);
+    return collection.snapshots().map((snapshot) {
+      return snapshot.docs
+          .map((doc) => BalanceReset.fromMap(doc.data() as Map<String, dynamic>))
+          .whereType<BalanceReset>()
+          .toList()
+        ..sort((a, b) => b.date.compareTo(a.date));
+    });
+  }
+
+  Future<void> addReset(BalanceReset reset) async {
+    final collection = _resetsCollection;
+    if (collection == null) throw Exception('User not authenticated');
+    try {
+      await collection.doc(reset.id).set(reset.toMap());
+    } catch (e) {
+      debugPrint('Error adding reset: $e');
+      rethrow;
+    }
+  }
+
+  Future<void> deleteReset(String id) async {
+    final collection = _resetsCollection;
+    if (collection == null) throw Exception('User not authenticated');
+    try {
+      await collection.doc(id).delete();
+    } catch (e) {
+      debugPrint('Error deleting reset: $e');
+      rethrow;
+    }
   }
 
   // ── Categories ────────────────────────────────────────────────────────────

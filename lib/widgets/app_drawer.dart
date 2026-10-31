@@ -5,6 +5,7 @@ import 'package:expenses_tracker/screens/sidebar/analytics_screen.dart';
 import 'package:expenses_tracker/screens/sidebar/profile_screen.dart';
 import 'package:expenses_tracker/screens/sidebar/settings_screen.dart';
 import 'package:expenses_tracker/screens/sidebar/shared_tracking_screen.dart';
+import 'package:expenses_tracker/services/balance_calculator.dart';
 import 'package:expenses_tracker/theme/theme_extensions.dart';
 
 /// A [MaterialPageRoute] with Flutter's own swipe-to-pop gesture disabled.
@@ -22,7 +23,10 @@ class _SidebarRoute<T> extends MaterialPageRoute<T> {
 }
 
 class AppDrawer extends StatelessWidget {
-  const AppDrawer({super.key});
+  /// Live balance/savings getter from HomeScreen, used by Settings → Reset.
+  final BalanceTotals Function()? currentTotals;
+
+  const AppDrawer({super.key, this.currentTotals});
 
   void _navigate(BuildContext context, Widget screen) {
     Navigator.pop(context);
@@ -120,7 +124,10 @@ class AppDrawer extends StatelessWidget {
             _DrawerItem(
               icon: Icons.settings_outlined,
               label: 'Settings',
-              onTap: () => _navigate(context, const SettingsScreen()),
+              onTap: () => _navigate(
+                context,
+                SettingsScreen(currentTotals: currentTotals),
+              ),
             ),
             const SizedBox(height: 8),
           ],

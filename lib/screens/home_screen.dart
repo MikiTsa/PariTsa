@@ -2,8 +2,10 @@ import 'dart:async';
 
 import 'package:flutter/material.dart' hide Split;
 import 'package:flutter/services.dart';
+import 'package:expenses_tracker/models/balance_reset.dart';
 import 'package:expenses_tracker/models/shared_tracker.dart';
 import 'package:expenses_tracker/models/transaction.dart';
+import 'package:expenses_tracker/services/balance_calculator.dart';
 import 'package:expenses_tracker/providers/app_settings.dart';
 import 'package:expenses_tracker/screens/expenses_screen.dart';
 import 'package:expenses_tracker/screens/incomes_screen.dart';
@@ -40,6 +42,7 @@ class _HomeScreenState extends State<HomeScreen>
   List<Transaction>? incomes;
   List<Transaction>? savings;
   List<Transaction>? sharedExpenses;
+  List<BalanceReset> _resets = [];
   List<SharedTracker> _sharedTrackers = [];
   bool _isSelectingInList = false;
 
@@ -150,6 +153,14 @@ class _HomeScreenState extends State<HomeScreen>
       }),
     );
 
+    _subscriptions.add(
+      _firebaseService.getResetsStream().listen((resets) {
+        if (mounted) setState(() => _resets = resets);
+      }, onError: (Object e) {
+        debugPrint('Resets stream error: $e');
+      }),
+    );
+
     // Subscribe to the tracker list, then maintain one tx-subscription per tracker
     _subscriptions.add(
       _firebaseService.getSharedTrackersStream().listen((trackers) {
@@ -225,17 +236,31 @@ class _HomeScreenState extends State<HomeScreen>
     super.dispose();
   }
 
-  double get currentBalance {
-    double income  = (incomes  ?? []).fold(0, (sum, item) => sum + item.amount);
-    double expense = (expenses ?? []).fold(0, (sum, item) => sum + item.amount);
-    double shared  = (sharedExpenses ?? []).fold(0, (sum, item) => sum + item.amount);
-    double saving  = (savings  ?? []).fold(0, (sum, item) => sum + item.amount);
-    return income - expense - shared - saving;
-  }
+  BalanceReset? get _balanceReset =>
+      BalanceCalculator.latestReset(_resets, ResetTarget.balance);
 
-  double get totalSavings {
-    return (savings ?? []).fold(0, (sum, item) => sum + item.amount);
-  }
+  BalanceReset? get _savingsReset =>
+      BalanceCalculator.latestReset(_resets, ResetTarget.savings);
+
+  double get currentBalance => BalanceCalculator.balance(
+        incomes: incomes ?? const [],
+        expenses: expenses ?? const [],
+        sharedExpenses: sharedExpenses ?? const [],
+        savings: savings ?? const [],
+        reset: _balanceReset,
+      );
+
+  double get totalSavings => BalanceCalculator.savings(
+        savings: savings ?? const [],
+        reset: _savingsReset,
+      );
+
+  // Read live by Settings → Reset so it always shows the current totals.
+  BalanceTotals _currentTotals() => (
+        balance: currentBalance,
+        savings: totalSavings,
+        resets: _resets,
+      );
 
   Color _interpolateTabColor(double value) {
     const colors = [
@@ -477,7 +502,7 @@ class _HomeScreenState extends State<HomeScreen>
 
     return Scaffold(
       key: _scaffoldKey,
-      drawer: const AppDrawer(),
+      drawer: AppDrawer(currentTotals: _currentTotals),
       drawerEnableOpenDragGesture: false,
       body: SafeArea(
         child: Stack(
@@ -705,9 +730,10 @@ class _HomeScreenState extends State<HomeScreen>
                   animation: tabCtrl.animation!,
                   builder: (context, _) {
                     final animIdx = tabCtrl.animation!.value.round().clamp(0, 2);
+                    final isSavings = animIdx == 2;
                     return BalanceBox(
-                      amount: animIdx == 2 ? totalSavings : currentBalance,
-                      isSavings: animIdx == 2,
+                      amount: isSavings ? totalSavings : currentBalance,
+                      isSavings: isSavings,
                       baseColor: _interpolateTabColor(tabCtrl.animation!.value),
                     );
                   },

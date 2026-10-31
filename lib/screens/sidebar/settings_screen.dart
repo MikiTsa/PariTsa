@@ -1,8 +1,12 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:expenses_tracker/models/balance_reset.dart';
 import 'package:expenses_tracker/providers/app_settings.dart';
+import 'package:expenses_tracker/services/balance_calculator.dart';
 import 'package:expenses_tracker/services/biometric_service.dart';
+import 'package:expenses_tracker/services/firebase_service.dart';
 import 'package:expenses_tracker/services/wallet_notification_service.dart';
 import 'package:expenses_tracker/theme/app_colors.dart';
 import 'package:expenses_tracker/theme/theme_extensions.dart';
@@ -66,7 +70,11 @@ const _kTabs = [
 // ─── Screen ────────────────────────────────────────────────────────────────────
 
 class SettingsScreen extends StatelessWidget {
-  const SettingsScreen({super.key});
+  /// Live balance/savings from HomeScreen. The Data → Reset section is only
+  /// shown when this is provided.
+  final BalanceTotals Function()? currentTotals;
+
+  const SettingsScreen({super.key, this.currentTotals});
 
   @override
   Widget build(BuildContext context) {
@@ -160,10 +168,123 @@ class SettingsScreen extends StatelessWidget {
             ],
           ),
 
+          // ── Data ──────────────────────────────────────────────────────────
+          if (currentTotals != null) ...[
+            const SizedBox(height: 24),
+            _SectionLabel('Data'),
+            const SizedBox(height: 8),
+            _SettingsCard(
+              children: [
+                _SettingsRow(
+                  icon: Icons.restart_alt,
+                  title: 'Reset balance or savings',
+                  onTap: () => _showResetSheet(context),
+                ),
+              ],
+            ),
+          ],
+
           const SizedBox(height: 32),
         ],
       ),
     );
+  }
+
+  // ── Reset ──────────────────────────────────────────────────────────────────
+
+  static String _resetLabel(ResetTarget target) => switch (target) {
+        ResetTarget.balance => 'Current Balance',
+        ResetTarget.savings => 'Total Savings',
+      };
+
+  void _showResetSheet(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (sheetCtx) => _ResetSheet(
+        totals: currentTotals!(),
+        onReset: (target) {
+          Navigator.pop(sheetCtx);
+          _confirmReset(context, target);
+        },
+        onUndo: (reset) {
+          Navigator.pop(sheetCtx);
+          _confirmUndo(context, reset);
+        },
+      ),
+    );
+  }
+
+  Future<void> _confirmReset(BuildContext context, ResetTarget target) async {
+    final totals = currentTotals!();
+    final current =
+        target == ResetTarget.balance ? totals.balance : totals.savings;
+
+    final amount = await showDialog<double>(
+      context: context,
+      builder: (_) => _ResetAmountDialog(target: target, currentAmount: current),
+    );
+    if (amount == null || !context.mounted) return;
+
+    final settings = AppSettingsScope.of(context);
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      await FirebaseService().addReset(BalanceReset(
+        target: target,
+        date: DateTime.now(),
+        amount: amount,
+        previousAmount: current,
+      ));
+      messenger.showSnackBar(SnackBar(
+        content: Text(
+          '${_resetLabel(target)} reset to ${settings.formatAmountFull(amount)}',
+        ),
+      ));
+    } catch (e) {
+      messenger.showSnackBar(SnackBar(
+        content: Text('Could not reset: $e'),
+        backgroundColor: AppColors.expense,
+      ));
+    }
+  }
+
+  Future<void> _confirmUndo(BuildContext context, BalanceReset reset) async {
+    final settings = AppSettingsScope.of(context);
+    final label = _resetLabel(reset.target);
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('Undo $label reset?'),
+        content: Text(
+          'The reset from ${settings.formatDate(reset.date)} will be removed, '
+          'along with its marker in History. $label will be calculated as '
+          'it was before that reset.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Undo reset'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !context.mounted) return;
+
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      await FirebaseService().deleteReset(reset.id);
+      messenger.showSnackBar(SnackBar(content: Text('$label reset undone')));
+    } catch (e) {
+      messenger.showSnackBar(SnackBar(
+        content: Text('Could not undo: $e'),
+        backgroundColor: AppColors.expense,
+      ));
+    }
   }
 
   static String _themeLabel(ThemeMode mode) => switch (mode) {
@@ -899,6 +1020,272 @@ class _WalletRowState extends State<_WalletRow> with WidgetsBindingObserver {
               ],
             ),
           ),
+      ],
+    );
+  }
+}
+
+// ─── Reset: choose balance or savings ──────────────────────────────────────────
+
+class _ResetSheet extends StatelessWidget {
+  final BalanceTotals totals;
+  final ValueChanged<ResetTarget> onReset;
+  final ValueChanged<BalanceReset> onUndo;
+
+  const _ResetSheet({
+    required this.totals,
+    required this.onReset,
+    required this.onUndo,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: context.cCard,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      child: SafeArea(
+        top: false,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(child: _SheetHandle()),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 4, 20, 4),
+              child: Text(
+                'Reset',
+                style: TextStyle(
+                  fontSize: 17,
+                  fontWeight: FontWeight.bold,
+                  color: context.cPrimaryText,
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+              child: Text(
+                'Start counting again from an amount you choose. '
+                'No transactions are deleted.',
+                style: TextStyle(fontSize: 13, color: context.cSecondaryText),
+              ),
+            ),
+            Divider(height: 1, color: context.cDivider),
+            _option(
+              context,
+              target: ResetTarget.balance,
+              icon: Icons.account_balance_wallet_outlined,
+              color: AppColors.primary,
+              amount: totals.balance,
+            ),
+            _option(
+              context,
+              target: ResetTarget.savings,
+              icon: Icons.savings_outlined,
+              color: AppColors.saving,
+              amount: totals.savings,
+            ),
+            const SizedBox(height: 16),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _option(
+    BuildContext context, {
+    required ResetTarget target,
+    required IconData icon,
+    required Color color,
+    required double amount,
+  }) {
+    final settings = AppSettingsScope.of(context);
+    final active = BalanceCalculator.latestReset(totals.resets, target);
+    final amountText = settings.formatAmountFull(amount);
+
+    return ListTile(
+      contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
+      leading: CircleAvatar(
+        backgroundColor: color.withValues(alpha: 0.12),
+        child: Icon(icon, color: color, size: 22),
+      ),
+      title: Text(
+        SettingsScreen._resetLabel(target),
+        style: TextStyle(
+          fontWeight: FontWeight.w600,
+          color: context.cPrimaryText,
+        ),
+      ),
+      subtitle: Text.rich(
+        TextSpan(
+          children: [
+            TextSpan(
+              text: amountText,
+              style: TextStyle(
+                fontWeight: FontWeight.w600,
+                color: amount < 0 ? AppColors.expense : context.cSecondaryText,
+              ),
+            ),
+            if (active != null)
+              TextSpan(
+                text: '  ·  since ${settings.formatDate(active.date)}',
+                style: TextStyle(color: context.cMutedText),
+              ),
+          ],
+        ),
+      ),
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (active != null)
+            TextButton.icon(
+              onPressed: () => onUndo(active),
+              icon: const Icon(Icons.undo, size: 18),
+              label: const Text('Undo'),
+              style: TextButton.styleFrom(foregroundColor: context.cMutedText),
+            ),
+          Icon(Icons.chevron_right, color: context.cMutedText, size: 20),
+        ],
+      ),
+      onTap: () => onReset(target),
+    );
+  }
+}
+
+// ─── Reset: choose the new amount and confirm ──────────────────────────────────
+
+class _ResetAmountDialog extends StatefulWidget {
+  final ResetTarget target;
+  final double currentAmount;
+
+  const _ResetAmountDialog({required this.target, required this.currentAmount});
+
+  @override
+  State<_ResetAmountDialog> createState() => _ResetAmountDialogState();
+}
+
+class _ResetAmountDialogState extends State<_ResetAmountDialog> {
+  final _controller = TextEditingController();
+  String? _error;
+
+  bool get _isBalance => widget.target == ResetTarget.balance;
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  // Many Android number keyboards have no minus key, so the balance field
+  // gets a ± button instead.
+  void _toggleSign() {
+    final text = _controller.text;
+    _controller.text = text.startsWith('-') ? text.substring(1) : '-$text';
+    _controller.selection =
+        TextSelection.collapsed(offset: _controller.text.length);
+  }
+
+  void _submit() {
+    final raw = _controller.text.trim().replaceAll(',', '.');
+    final value = (raw.isEmpty || raw == '-') ? 0.0 : double.tryParse(raw);
+
+    final String? error;
+    if (value == null) {
+      error = 'Enter a valid amount';
+    } else if (value.abs() > 999999999) {
+      error = 'Amount is too large';
+    } else if (!_isBalance && value < 0) {
+      error = 'Savings cannot be negative';
+    } else {
+      error = null;
+    }
+
+    if (error != null) {
+      setState(() => _error = error);
+      return;
+    }
+    Navigator.pop(context, double.parse(value!.toStringAsFixed(2)));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final settings = AppSettingsScope.of(context);
+    final color = _isBalance ? AppColors.primary : AppColors.saving;
+
+    return AlertDialog(
+      scrollable: true,
+      title: Text('Reset ${SettingsScreen._resetLabel(widget.target)}'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text.rich(
+            TextSpan(
+              text: 'Currently ',
+              style: TextStyle(color: context.cSecondaryText),
+              children: [
+                TextSpan(
+                  text: settings.formatAmountFull(widget.currentAmount),
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: widget.currentAmount < 0
+                        ? AppColors.expense
+                        : context.cPrimaryText,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            'Enter the amount to start from. Your transactions stay in '
+            'History and Analytics, and a reset marker is added to History.',
+            style: TextStyle(fontSize: 13, color: context.cMutedText),
+          ),
+          const SizedBox(height: 16),
+          TextField(
+            controller: _controller,
+            autofocus: true,
+            keyboardType: TextInputType.numberWithOptions(
+              decimal: true,
+              signed: _isBalance,
+            ),
+            inputFormatters: [
+              FilteringTextInputFormatter.allow(
+                RegExp(_isBalance ? r'^-?[0-9]*[.,]?[0-9]{0,2}' : r'^[0-9]*[.,]?[0-9]{0,2}'),
+              ),
+            ],
+            decoration: InputDecoration(
+              labelText: 'New amount',
+              hintText: '0.00',
+              prefixText: '${settings.currencySymbol} ',
+              errorText: _error,
+              suffixIcon: _isBalance
+                  ? IconButton(
+                      tooltip: 'Positive / negative',
+                      icon: const Icon(Icons.exposure),
+                      onPressed: _toggleSign,
+                    )
+                  : null,
+            ),
+            onChanged: (_) {
+              if (_error != null) setState(() => _error = null);
+            },
+            onSubmitted: (_) => _submit(),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: _submit,
+          style: FilledButton.styleFrom(backgroundColor: color),
+          child: const Text('Reset'),
+        ),
       ],
     );
   }

@@ -30,6 +30,22 @@ service cloud.firestore {
              );
     }
 
+    // Balance/savings reset point. Created and deleted (undo) only, never edited.
+    function isValidReset(resetId) {
+      let data   = request.resource.data;
+      let fields = ['id', 'target', 'date', 'amount', 'previousAmount'];
+      return data.keys().hasAll(fields)
+          && data.keys().hasOnly(fields)
+          && data.id == resetId
+          && data.target in ['balance', 'savings']
+          && data.date is timestamp
+          && data.amount is number
+          && data.amount >= -999999999
+          && data.amount <= 999999999
+          && (data.target == 'balance' || data.amount >= 0)
+          && data.previousAmount is number;
+    }
+
     // Only call this on create/update — request.resource is null on read/delete.
     function isValidCategoryData() {
       return request.resource.data.keys().hasOnly(['items'])
@@ -164,6 +180,13 @@ service cloud.firestore {
       match /categories/{categoryDocId} {
         allow read: if isOwner(userId);
         allow write: if isOwner(userId) && isValidCategoryData();
+      }
+
+      // RESETS subcollection — balance/savings reset points (non-destructive)
+      match /resets/{resetId} {
+        allow read, delete: if isOwner(userId);
+        allow create: if isOwner(userId) && isValidReset(resetId);
+        allow update: if false;
       }
 
       // FCM TOKENS subcollection — device push tokens, written by the device owner only
