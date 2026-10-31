@@ -5,7 +5,6 @@ import 'package:expenses_tracker/screens/sidebar/analytics_screen.dart';
 import 'package:expenses_tracker/screens/sidebar/profile_screen.dart';
 import 'package:expenses_tracker/screens/sidebar/settings_screen.dart';
 import 'package:expenses_tracker/screens/sidebar/shared_tracking_screen.dart';
-import 'package:expenses_tracker/theme/app_colors.dart';
 import 'package:expenses_tracker/theme/theme_extensions.dart';
 
 /// A [MaterialPageRoute] with Flutter's own swipe-to-pop gesture disabled.
@@ -36,44 +35,48 @@ class AppDrawer extends StatelessWidget {
       width: 280,
       backgroundColor: context.cBackground,
       child: SafeArea(
+        left: false,
+        right: false,
         child: Column(
           children: [
-            // Header — always primary brand colour, no theme switch needed
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
-              decoration: const BoxDecoration(
-                color: AppColors.primary,
-              ),
-              child: const Column(
+            // Header — flush left, same x-origin as list item icons
+            Padding(
+              padding: const EdgeInsets.only(top: 20, bottom: 16),
+              child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Icon(
-                    Icons.account_balance_wallet_outlined,
-                    color: Colors.white,
-                    size: 36,
+                  Image.asset(
+                    'assets/logo_PariTsa_white.png',
+                    height: 100,
                   ),
-                  SizedBox(height: 10),
-                  Text(
-                    'PariTsa',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 22,
-                      fontWeight: FontWeight.bold,
-                      letterSpacing: 0.5,
+                  const SizedBox(height: 8),
+                  Padding(
+                    padding: const EdgeInsets.only(left: 4),
+                    child: Text(
+                      'PariTsa',
+                      style: TextStyle(
+                        color: context.cPrimaryText,
+                        fontSize: 22,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 0.5,
+                      ),
                     ),
                   ),
-                  SizedBox(height: 2),
-                  Text(
-                    'Personal Finance Tracker',
-                    style: TextStyle(
-                      color: Colors.white70,
-                      fontSize: 12,
+                  Padding(
+                    padding: const EdgeInsets.only(left: 4),
+                    child: Text(
+                      'Personal Finance Tracker',
+                      style: TextStyle(
+                        color: context.cMutedText,
+                        fontSize: 12,
+                      ),
                     ),
                   ),
                 ],
               ),
             ),
+
+            Divider(color: context.cDivider, height: 1),
 
             Expanded(
               child: SingleChildScrollView(

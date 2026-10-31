@@ -82,11 +82,10 @@ class _LoginScreenState extends State<LoginScreen> {
                 mainAxisAlignment: MainAxisAlignment.center,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  // Icon
-                  const Icon(
-                    Icons.account_balance_wallet,
-                    size: 80,
-                    color: AppColors.primary,
+                  // Logo
+                  Image.asset(
+                    'assets/logo_PariTsa_white.png',
+                    height: 100,
                   ),
                   const SizedBox(height: 16),
 
