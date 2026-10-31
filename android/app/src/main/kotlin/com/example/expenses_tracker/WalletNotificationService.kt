@@ -49,6 +49,25 @@ class WalletNotificationService : NotificationListenerService() {
             if (BuildConfig.DEBUG) add("com.example.expenses_tracker")
         }
 
+        // Notifications where no money moved — skip entirely.
+        // Bare "pending" is deliberately excluded: a completed tap can still be
+        // reported as pending settlement, and silently dropping a real payment
+        // is worse than an occasional extra entry the user can delete.
+        private val DECLINED_KEYWORDS = listOf(
+            "declined", "failed", "could not complete", "unsuccessful",
+            "not successful", "authorization hold",
+        )
+
+        // Refunds land in incomes, so they use a category from the default
+        // income list rather than the merchant-based expense category.
+        private const val REFUND_CATEGORY = "Other"
+
+        // Notifications where money was returned to the user — add as income.
+        private val REFUND_KEYWORDS = listOf(
+            "refund", "refunded", "reversed", "reversal", "voided", "void",
+            "chargeback", "money back",
+        )
+
         // Keywords matched case-insensitively → category "Groceries".
         private val GROCERY_KEYWORDS = listOf("lidl", "spar", "hofer", "mercator")
 
@@ -133,16 +152,42 @@ class WalletNotificationService : NotificationListenerService() {
         Log.d(TAG, "pkg=${sbn.packageName} title=[$title] text=[$text] bigText=[$bigText]")
 
         val amount = extractAmount("$title $body")
+
         if (amount == null) {
             Log.w(TAG, "Could not extract amount — skipping. title=[$title] body=[$body]")
             return
         }
+
+        if (isDeclinedNotification(title, body)) {
+            Log.d(TAG, "Declined/failed notification — skipping. title=[$title]")
+            return
+        }
+
         val merchant = extractMerchant(title, body)
-        val category = categoryForMerchant(merchant)
+        val isRefund = isRefundNotification(title, body)
+        val category = if (isRefund) REFUND_CATEGORY else categoryForMerchant(merchant)
 
-        Log.d(TAG, "Parsed → merchant=$merchant  amount=$amount  category=$category")
+        Log.d(TAG, "Parsed → merchant=$merchant  amount=$amount  category=$category  isRefund=$isRefund")
 
-        writeExpenseToFirestore(merchant, amount, category)
+        if (isRefund) {
+            writeIncomeToFirestore(merchant, amount, category)
+        } else {
+            writeExpenseToFirestore(merchant, amount, category)
+        }
+    }
+
+    // ── Notification classification ───────────────────────────────────────────
+
+    /** Returns true if no money actually moved (decline, fail, authorization hold). */
+    private fun isDeclinedNotification(title: String, body: String): Boolean {
+        val combined = "$title $body".lowercase()
+        return DECLINED_KEYWORDS.any { combined.contains(it) }
+    }
+
+    /** Returns true if money was returned to the user (refund, reversal, void). */
+    private fun isRefundNotification(title: String, body: String): Boolean {
+        val combined = "$title $body".lowercase()
+        return REFUND_KEYWORDS.any { combined.contains(it) }
     }
 
     // ── Categorization ────────────────────────────────────────────────────────
@@ -177,7 +222,37 @@ class WalletNotificationService : NotificationListenerService() {
             .set(doc)
             .addOnSuccessListener {
                 Log.d(TAG, "Expense saved: $merchant €$amount")
-                showLocalNotification(merchant, amount, category)
+                showLocalNotification(merchant, amount, category, isRefund = false)
+            }
+            .addOnFailureListener { e ->
+                Log.e(TAG, "Firestore write failed: $e")
+            }
+    }
+
+    private fun writeIncomeToFirestore(merchant: String, amount: Double, category: String) {
+        val uid = FirebaseAuth.getInstance().currentUser?.uid
+        if (uid == null) {
+            Log.w(TAG, "No authenticated user — income not saved")
+            return
+        }
+
+        val id = UUID.randomUUID().toString()
+        val doc = hashMapOf(
+            "id"       to id,
+            "title"    to merchant,
+            "amount"   to amount,
+            "date"     to Timestamp.now(),
+            "category" to category,
+            "note"     to "Auto-captured refund from Google Wallet",
+        )
+
+        FirebaseFirestore.getInstance()
+            .collection("users").document(uid)
+            .collection("incomes").document(id)
+            .set(doc)
+            .addOnSuccessListener {
+                Log.d(TAG, "Refund income saved: $merchant €$amount")
+                showLocalNotification(merchant, amount, category, isRefund = true)
             }
             .addOnFailureListener { e ->
                 Log.e(TAG, "Firestore write failed: $e")
@@ -186,7 +261,7 @@ class WalletNotificationService : NotificationListenerService() {
 
     // ── Local notification ────────────────────────────────────────────────────
 
-    private fun showLocalNotification(merchant: String, amount: Double, category: String) {
+    private fun showLocalNotification(merchant: String, amount: Double, category: String, isRefund: Boolean) {
         val manager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
 
         val channel = NotificationChannel(
@@ -194,13 +269,14 @@ class WalletNotificationService : NotificationListenerService() {
             NOTIF_CHANNEL_NAME,
             NotificationManager.IMPORTANCE_DEFAULT,
         ).apply {
-            description = "Notifies when a Google Wallet payment is added as an expense."
+            description = "Notifies when a Google Wallet payment is captured automatically."
         }
         manager.createNotificationChannel(channel)
 
-        // Tapping the notification opens the app on the Expenses tab.
+        // Tapping the notification opens the app on the appropriate tab.
+        val tabAction = if (isRefund) "open_incomes" else "open_expenses"
         val openIntent = Intent(this, MainActivity::class.java).apply {
-            putExtra(AddTransactionWidget.EXTRA_ACTION, "open_expenses")
+            putExtra(AddTransactionWidget.EXTRA_ACTION, tabAction)
             flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
         }
         val pendingIntent = PendingIntent.getActivity(
@@ -209,9 +285,10 @@ class WalletNotificationService : NotificationListenerService() {
         )
 
         val amountStr = String.format("%.2f", amount)
+        val title = if (isRefund) "Refund added from Google Wallet" else "Expense added from Google Wallet"
         val notification = NotificationCompat.Builder(this, NOTIF_CHANNEL_ID)
             .setSmallIcon(R.mipmap.ic_launcher)
-            .setContentTitle("Expense added from Google Wallet")
+            .setContentTitle(title)
             .setContentText("$merchant — €$amountStr  ·  $category")
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
             .setAutoCancel(true)
