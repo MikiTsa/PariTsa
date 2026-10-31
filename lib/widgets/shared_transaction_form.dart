@@ -321,6 +321,7 @@ class _SharedTransactionFormState extends State<SharedTransactionForm> {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
+        scrollable: true,
         title: const Text('Tag (Optional)'),
         content: TextField(
           controller: tempController,

@@ -415,8 +415,10 @@ class _TransactionListState extends State<TransactionList> {
             topRight: Radius.circular(24),
           ),
         ),
-        padding: const EdgeInsets.fromLTRB(8, 12, 8, 28),
-        child: Column(
+        padding: const EdgeInsets.fromLTRB(8, 12, 8, 0),
+        child: SafeArea(
+          top: false,
+          child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             Container(
@@ -482,6 +484,7 @@ class _TransactionListState extends State<TransactionList> {
               },
             ),
           ],
+        ),
         ),
       ),
     );

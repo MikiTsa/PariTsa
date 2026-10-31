@@ -214,6 +214,7 @@ class _TransactionFormState extends State<TransactionForm> {
               .toList();
 
           return AlertDialog(
+            scrollable: true,
             title: const Text('Tag (Optional)'),
             content: Column(
               mainAxisSize: MainAxisSize.min,
