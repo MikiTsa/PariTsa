@@ -24,6 +24,8 @@ class HistoryScreen extends StatefulWidget {
 class _HistoryScreenState extends State<HistoryScreen> {
   final _service = FirebaseService();
   final List<StreamSubscription<dynamic>> _subs = [];
+  final Map<String, StreamSubscription<dynamic>> _sharedTxSubs = {};
+  final Map<String, List<Transaction>> _sharedTxData = {};
   bool _popping = false;
 
   List<Transaction> _expenses = [];
@@ -48,6 +50,52 @@ class _HistoryScreenState extends State<HistoryScreen> {
         if (mounted && !_popping) setState(() => _savings = list);
       }),
     );
+    _subs.add(
+      _service.getSharedTrackersStream().listen((trackers) {
+        if (!mounted || _popping) return;
+        final uid = _service.currentUserId;
+        if (uid == null) return;
+
+        final currentIds = trackers.map((t) => t.id).toSet();
+
+        for (final id in _sharedTxSubs.keys
+            .where((k) => !currentIds.contains(k))
+            .toList()) {
+          _sharedTxSubs[id]?.cancel();
+          _sharedTxSubs.remove(id);
+          _sharedTxData.remove(id);
+        }
+
+        for (final tracker in trackers) {
+          if (_sharedTxSubs.containsKey(tracker.id)) continue;
+          final tid = tracker.id;
+          _sharedTxSubs[tid] = _service
+              .getSharedTransactionsStream(tid)
+              .listen((txList) {
+            if (!mounted || _popping) return;
+            _sharedTxData[tid] = txList
+                .where((tx) => tx.splits.any((s) => s.uid == uid))
+                .map((tx) {
+                  final split = tx.splits.firstWhere((s) => s.uid == uid);
+                  return Transaction(
+                    id: tx.id,
+                    title: tx.title,
+                    amount: split.amount,
+                    date: tx.date,
+                    category: split.myCategory ?? tx.category,
+                    note: tx.note,
+                    tag: tx.tag,
+                    sharedTrackerId: tid,
+                  );
+                })
+                .toList();
+            setState(() {});
+          });
+        }
+
+        if (currentIds.isEmpty) setState(() => _sharedTxData.clear());
+      }),
+    );
   }
 
   @override
@@ -55,14 +103,21 @@ class _HistoryScreenState extends State<HistoryScreen> {
     for (final s in _subs) {
       s.cancel();
     }
+    for (final s in _sharedTxSubs.values) {
+      s.cancel();
+    }
     super.dispose();
   }
 
   List<_HistoryEntry> get _sorted {
+    final sharedEntries = _sharedTxData.values
+        .expand((l) => l)
+        .map((t) => _HistoryEntry(t, TransactionType.expense));
     return [
       ..._expenses.map((t) => _HistoryEntry(t, TransactionType.expense)),
       ..._incomes.map((t) => _HistoryEntry(t, TransactionType.income)),
       ..._savings.map((t) => _HistoryEntry(t, TransactionType.saving)),
+      ...sharedEntries,
     ]..sort((a, b) => b.transaction.date.compareTo(a.transaction.date));
   }
 
@@ -346,6 +401,36 @@ class _HistoryScreenState extends State<HistoryScreen> {
                                     color: color,
                                     fontWeight: FontWeight.w500,
                                   ),
+                                ),
+                              ),
+                            if (t.isShared)
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 6,
+                                  vertical: 1,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: AppColors.primary.withValues(alpha: 0.12),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      Icons.people_outline,
+                                      size: 11,
+                                      color: AppColors.primary,
+                                    ),
+                                    const SizedBox(width: 3),
+                                    Text(
+                                      'Shared',
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        color: AppColors.primary,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ),
                           ],
