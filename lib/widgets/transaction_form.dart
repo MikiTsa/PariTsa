@@ -195,8 +195,17 @@ class _TransactionFormState extends State<TransactionForm> {
         );
       },
     );
-    if (picked != null && picked != _selectedDate) {
-      setState(() => _selectedDate = picked);
+    if (picked != null) {
+      // The picker returns midnight; keep the time of day so an entry made
+      // "today" still sorts (and counts toward a reset) after earlier ones.
+      setState(() => _selectedDate = DateTime(
+            picked.year,
+            picked.month,
+            picked.day,
+            _selectedDate.hour,
+            _selectedDate.minute,
+            _selectedDate.second,
+          ));
     }
   }
 

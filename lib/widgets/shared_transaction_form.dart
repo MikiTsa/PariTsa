@@ -359,7 +359,18 @@ class _SharedTransactionFormState extends State<SharedTransactionForm> {
       firstDate: DateTime(2000),
       lastDate: DateTime(2100),
     );
-    if (picked != null) setState(() => _date = picked);
+    if (picked != null) {
+      // Keep the time of day (the picker returns midnight) so same-day
+      // entries still count toward a balance reset made earlier that day.
+      setState(() => _date = DateTime(
+            picked.year,
+            picked.month,
+            picked.day,
+            _date.hour,
+            _date.minute,
+            _date.second,
+          ));
+    }
   }
 
   void _submit() {
