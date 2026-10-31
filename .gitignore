@@ -50,6 +50,5 @@ android/app/google-services.json
 ios/Runner/GoogleService-Info.plist
 macos/Runner/GoogleService-Info.plist
 
-# Claude — local only
-CLAUDE.md
-.claude/
+# Cloud Functions dependencies
+functions/node_modules/
