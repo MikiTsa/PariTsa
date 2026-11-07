@@ -6,6 +6,7 @@ import 'package:expenses_tracker/models/balance_reset.dart';
 import 'package:expenses_tracker/models/shared_tracker.dart';
 import 'package:expenses_tracker/models/transaction.dart';
 import 'package:expenses_tracker/services/balance_calculator.dart';
+import 'package:expenses_tracker/services/exchange_rate_service.dart';
 import 'package:expenses_tracker/providers/app_settings.dart';
 import 'package:expenses_tracker/screens/expenses_screen.dart';
 import 'package:expenses_tracker/screens/incomes_screen.dart';
@@ -50,6 +51,11 @@ class _HomeScreenState extends State<HomeScreen>
   final Map<String, StreamSubscription<dynamic>> _sharedTxSubs = {};
   final Map<String, List<Transaction>> _sharedTxData = {};
 
+  // Currency: settings reference + re-conversion of offline estimates.
+  AppSettings? _settings;
+  final Set<String> _fixingRateIds = {};
+  DateTime? _rateFixPausedUntil;
+
   @override
   void initState() {
     super.initState();
@@ -62,6 +68,8 @@ class _HomeScreenState extends State<HomeScreen>
     super.didChangeDependencies();
     if (!_initialized) {
       _initialized = true;
+      _settings = AppSettingsScope.of(context);
+      WidgetsBinding.instance.addPostFrameCallback((_) => _syncBaseCurrency());
       final defaultTab = AppSettingsScope.of(context).defaultTab;
       _tabController = TabController(
         length: 3,
@@ -73,6 +81,76 @@ class _HomeScreenState extends State<HomeScreen>
       // Cold-launch path: app was started by tapping a widget.
       WidgetsBinding.instance.addPostFrameCallback((_) => _checkWidgetAction());
     }
+  }
+
+  /// The account's default currency wins over this device's setting (e.g.
+  /// after a reinstall); a missing one is filled in from the device. Then the
+  /// latest rates are cached so offline captures can be converted.
+  Future<void> _syncBaseCurrency() async {
+    final settings = _settings;
+    if (settings == null) return;
+    try {
+      final remote = await _firebaseService.getBaseCurrency();
+      if (remote == null) {
+        await _firebaseService.setBaseCurrency(settings.currency);
+      } else if (remote != settings.currency) {
+        await settings.setCurrency(remote);
+      }
+    } catch (e) {
+      debugPrint('Base currency sync skipped: $e');
+    }
+    await ExchangeRateService.instance.prewarm(settings.currency);
+  }
+
+  /// Payments converted with a cached (offline) rate are re-converted with
+  /// the exact rate for their date once rates can be fetched again.
+  void _fixEstimatedRates(List<Transaction> list, TransactionType type) {
+    final settings = _settings;
+    if (settings == null) return;
+    final paused = _rateFixPausedUntil;
+    if (paused != null && DateTime.now().isBefore(paused)) return;
+
+    final pending = list
+        .where((t) =>
+            t.rateEstimated &&
+            t.isForeign &&
+            t.originalCurrency != settings.currency &&
+            !_fixingRateIds.contains(t.id))
+        .toList();
+    if (pending.isEmpty) return;
+
+    final ids = pending.map((t) => t.id).toList();
+    _fixingRateIds.addAll(ids);
+    () async {
+      try {
+        for (final t in pending) {
+          final quote = await ExchangeRateService.instance.quote(
+            from: t.originalCurrency!,
+            to: settings.currency,
+            date: t.date,
+            allowCached: false,
+          );
+          if (quote == null) {
+            _rateFixPausedUntil =
+                DateTime.now().add(const Duration(minutes: 5));
+            return;
+          }
+          await _firebaseService.updateTransaction(
+            t.withForeignAmount(
+              foreignAmount: t.originalAmount!,
+              currency: t.originalCurrency!,
+              rate: quote.rate,
+            ),
+            type,
+          );
+        }
+      } catch (e) {
+        debugPrint('Rate re-conversion failed: $e');
+        _rateFixPausedUntil = DateTime.now().add(const Duration(minutes: 5));
+      } finally {
+        _fixingRateIds.removeAll(ids);
+      }
+    }();
   }
 
   Future<void> _checkWidgetAction() async {
@@ -134,6 +212,7 @@ class _HomeScreenState extends State<HomeScreen>
         transactions,
       ) {
         if (mounted) setState(() => expenses = transactions);
+        _fixEstimatedRates(transactions, TransactionType.expense);
       }),
     );
 
@@ -142,6 +221,7 @@ class _HomeScreenState extends State<HomeScreen>
         transactions,
       ) {
         if (mounted) setState(() => incomes = transactions);
+        _fixEstimatedRates(transactions, TransactionType.income);
       }),
     );
 
@@ -150,6 +230,7 @@ class _HomeScreenState extends State<HomeScreen>
         transactions,
       ) {
         if (mounted) setState(() => savings = transactions);
+        _fixEstimatedRates(transactions, TransactionType.saving);
       }),
     );
 

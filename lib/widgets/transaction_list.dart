@@ -1,10 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:expenses_tracker/models/currency.dart';
 import 'package:expenses_tracker/models/transaction.dart';
 import 'package:expenses_tracker/providers/app_settings.dart';
 import 'package:expenses_tracker/screens/sidebar/shared_tracker_detail_screen.dart';
+import 'package:expenses_tracker/services/exchange_rate_service.dart';
+import 'package:expenses_tracker/services/firebase_service.dart';
 import 'package:expenses_tracker/theme/app_colors.dart';
 import 'package:expenses_tracker/theme/theme_extensions.dart';
+import 'package:expenses_tracker/widgets/currency_picker.dart';
 
 class TransactionList extends StatefulWidget {
   final List<Transaction> transactions;
@@ -140,6 +144,114 @@ class _TransactionListState extends State<TransactionList> {
     final txs = _selectedTransactions;
     _clearSelection();
     await widget.onMoveMultipleToShared?.call(txs);
+  }
+
+  /// Fix entries saved with the wrong currency: treat each selected amount
+  /// as [code] and convert it at the rate of the transaction's own date.
+  Future<void> _convertSelected() async {
+    final base = AppSettingsScope.of(context).currency;
+    final messenger = ScaffoldMessenger.of(context);
+    final selected = _selectedTransactions.where((t) => !t.isShared).toList();
+
+    final code = await showCurrencyPicker(
+      context,
+      current: base,
+      title: 'These were paid in…',
+      accent: _typeColor,
+    );
+    if (code == null || code == base || !mounted) return;
+
+    final toConvert = selected.where((t) => !t.isForeign).toList();
+    final skipped = selected.length - toConvert.length;
+    if (toConvert.isEmpty) {
+      messenger.showSnackBar(const SnackBar(
+        content: Text('These transactions already have a currency'),
+      ));
+      return;
+    }
+
+    final n = toConvert.length;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('Convert $n ${n == 1 ? 'transaction' : 'transactions'} from $code?'),
+        content: Text(
+          'Each amount is treated as $code and converted to $base at the '
+          'rate of its own date. Use this for entries that were saved in '
+          'the wrong currency.'
+          '${skipped > 0 ? '\n\n$skipped already converted ${skipped == 1 ? 'entry is' : 'entries are'} skipped.' : ''}',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: FilledButton.styleFrom(backgroundColor: _typeColor),
+            child: const Text('Convert'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    final navigator = Navigator.of(context);
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => PopScope(
+        canPop: false,
+        child: AlertDialog(
+          content: Row(
+            children: [
+              const SizedBox(
+                width: 24,
+                height: 24,
+                child: CircularProgressIndicator(strokeWidth: 3),
+              ),
+              const SizedBox(width: 20),
+              Expanded(child: Text('Converting from $code…')),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    try {
+      final converted = <Transaction>[];
+      for (final t in toConvert) {
+        final quote = await ExchangeRateService.instance.quote(
+          from: code,
+          to: base,
+          date: t.date,
+        );
+        if (quote == null) {
+          throw Exception("couldn't get the $code rate. Check your connection");
+        }
+        converted.add(t.withForeignAmount(
+          foreignAmount: t.amount,
+          currency: code,
+          rate: quote.rate,
+          estimated: quote.estimated,
+        ));
+      }
+      await FirebaseService().saveTransactions(
+        converted,
+        widget.transactionType,
+      );
+      navigator.pop();
+      _clearSelection();
+      messenger.showSnackBar(SnackBar(
+        content: Text('Converted $n ${n == 1 ? 'transaction' : 'transactions'} from $code'),
+      ));
+    } catch (e) {
+      navigator.pop();
+      messenger.showSnackBar(SnackBar(
+        content: Text('Conversion failed: $e'),
+        backgroundColor: AppColors.expense,
+      ));
+    }
   }
 
   @override
@@ -283,6 +395,21 @@ class _TransactionListState extends State<TransactionList> {
                                     ],
                                   ),
                                 ),
+                              if (transaction.isForeign)
+                                Text(
+                                  formatWithCode(
+                                        transaction.originalAmount!,
+                                        transaction.originalCurrency!,
+                                      ) +
+                                      (transaction.rateEstimated
+                                          ? ' · est.'
+                                          : ''),
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: context.cMutedText,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
                             ],
                           ),
                           trailing: Column(
@@ -360,6 +487,13 @@ class _TransactionListState extends State<TransactionList> {
               ),
             ),
             const Spacer(),
+            // Convert from another currency (fixes wrongly saved amounts)
+            IconButton(
+              onPressed: _convertSelected,
+              tooltip: 'Convert from another currency',
+              icon: const Icon(Icons.currency_exchange, size: 20),
+              color: _typeColor,
+            ),
             // Move to Shared (expenses only)
             if (canMove) ...[
               TextButton.icon(
@@ -632,6 +766,18 @@ class _TransactionListState extends State<TransactionList> {
                           Icons.label_outline,
                           'Tag',
                           transaction.tag!,
+                        ),
+                      ],
+                      if (transaction.isForeign) ...[
+                        if (transaction.category != null ||
+                            transaction.note != null ||
+                            transaction.tag != null)
+                          const SizedBox(height: 12),
+                        _buildDetailRow(
+                          context,
+                          Icons.currency_exchange,
+                          'Paid in ${transaction.originalCurrency}',
+                          originalAmountDetail(transaction, settings.currency),
                         ),
                       ],
                     ],

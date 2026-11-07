@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:expenses_tracker/models/currency.dart';
 import 'package:expenses_tracker/models/transaction.dart';
+import 'package:expenses_tracker/providers/app_settings.dart';
+import 'package:expenses_tracker/services/exchange_rate_service.dart';
 import 'package:expenses_tracker/services/firebase_service.dart';
 import 'package:expenses_tracker/theme/app_colors.dart';
 import 'package:expenses_tracker/theme/theme_extensions.dart';
+import 'package:expenses_tracker/widgets/currency_picker.dart';
 
 class TransactionForm extends StatefulWidget {
   final TransactionType transactionType;
@@ -32,7 +36,17 @@ class _TransactionFormState extends State<TransactionForm> {
   List<String> _categories = [];
   List<String> _usedTags = [];
 
+  // Currency the amount is typed in; converted to the default on save.
+  String _baseCurrency = 'EUR';
+  String? _currency;
+  RateQuote? _quote;
+  bool _quoteLoading = false;
+  bool _quoteFailed = false;
+  int _quoteRequest = 0;
+  bool _saving = false;
+
   bool get isEditing => widget.initialTransaction != null;
+  bool get _isForeign => _currency != null && _currency != _baseCurrency;
 
   Color get _typeColor {
     switch (widget.transactionType) {
@@ -60,8 +74,12 @@ class _TransactionFormState extends State<TransactionForm> {
   void initState() {
     super.initState();
     if (widget.initialTransaction != null) {
-      _titleController.text = widget.initialTransaction!.title;
-      _amountController.text = widget.initialTransaction!.amount.toString();
+      final initial = widget.initialTransaction!;
+      _titleController.text = initial.title;
+      // A foreign payment is edited in the currency it was paid in.
+      _amountController.text =
+          (initial.isForeign ? initial.originalAmount! : initial.amount)
+              .toString();
       _selectedDate = widget.initialTransaction!.date;
       _selectedCategory = widget.initialTransaction!.category;
       if (widget.initialTransaction!.note != null) {
@@ -74,6 +92,65 @@ class _TransactionFormState extends State<TransactionForm> {
     _loadCategories();
     _loadTags();
   }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_currency != null) return; // first run only
+    _baseCurrency = AppSettingsScope.of(context).currency;
+    final initial = widget.initialTransaction;
+    _currency = (initial != null && initial.isForeign)
+        ? initial.originalCurrency!
+        : _baseCurrency;
+    if (_isForeign) {
+      _quoteLoading = true;
+      Future.microtask(_refreshQuote); // setState isn't allowed mid-build
+    }
+  }
+
+  /// Fetches the rate for the chosen currency and date. Older in-flight
+  /// requests are ignored if the user changes currency or date meanwhile.
+  Future<void> _refreshQuote() async {
+    if (!mounted) return;
+    final request = ++_quoteRequest;
+    if (!_isForeign) {
+      setState(() {
+        _quote = null;
+        _quoteLoading = false;
+        _quoteFailed = false;
+      });
+      return;
+    }
+    setState(() {
+      _quote = null;
+      _quoteLoading = true;
+      _quoteFailed = false;
+    });
+    final q = await ExchangeRateService.instance.quote(
+      from: _currency!,
+      to: _baseCurrency,
+      date: _selectedDate,
+    );
+    if (!mounted || request != _quoteRequest) return;
+    setState(() {
+      _quote = q;
+      _quoteLoading = false;
+      _quoteFailed = q == null;
+    });
+  }
+
+  Future<void> _pickCurrency() async {
+    final code = await showCurrencyPicker(
+      context,
+      current: _currency ?? _baseCurrency,
+      accent: _typeColor,
+    );
+    if (code == null || code == _currency || !mounted) return;
+    setState(() => _currency = code);
+    _refreshQuote();
+  }
+
+  double? get _enteredAmount => double.tryParse(_amountController.text.trim());
 
   Future<void> _loadTags() async {
     final tags = await FirebaseService().getUsedTags();
@@ -206,6 +283,8 @@ class _TransactionFormState extends State<TransactionForm> {
             _selectedDate.minute,
             _selectedDate.second,
           ));
+      // A foreign amount converts at the rate of the transaction's own date.
+      if (_isForeign) _refreshQuote();
     }
   }
 
@@ -292,26 +371,161 @@ class _TransactionFormState extends State<TransactionForm> {
     );
   }
 
-  void _submitForm() {
-    if (_formKey.currentState!.validate()) {
-      final transactionData = Transaction(
-        id: isEditing ? widget.initialTransaction!.id : null,
-        title: _titleController.text.trim(),
-        amount: double.parse(_amountController.text),
-        date: _selectedDate,
-        category: _selectedCategory,
-        note:
-            _noteController.text.isNotEmpty
-                ? _noteController.text.trim()
-                : null,
-        tag:
-            _tagController.text.isNotEmpty
-                ? _tagController.text.trim()
-                : null,
+  Future<void> _submitForm() async {
+    if (_saving || !_formKey.currentState!.validate()) return;
+
+    final entered = double.parse(_amountController.text.trim());
+    var transactionData = Transaction(
+      id: isEditing ? widget.initialTransaction!.id : null,
+      title: _titleController.text.trim(),
+      amount: entered,
+      date: _selectedDate,
+      category: _selectedCategory,
+      note:
+          _noteController.text.isNotEmpty
+              ? _noteController.text.trim()
+              : null,
+      tag:
+          _tagController.text.isNotEmpty
+              ? _tagController.text.trim()
+              : null,
+    );
+
+    if (_isForeign) {
+      // Editing without touching amount, currency or date keeps the stored
+      // rate, so an unrelated edit (e.g. the title) never changes the amount.
+      final initial = widget.initialTransaction;
+      final rateUnchanged = initial != null &&
+          initial.isForeign &&
+          initial.exchangeRate != null &&
+          initial.originalCurrency == _currency &&
+          initial.originalAmount == entered &&
+          DateUtils.isSameDay(initial.date, _selectedDate);
+
+      RateQuote? quote;
+      if (rateUnchanged) {
+        quote = RateQuote(
+          initial.exchangeRate!,
+          estimated: initial.rateEstimated,
+        );
+      } else {
+        quote = _quote;
+        if (quote == null) {
+          setState(() => _saving = true);
+          quote = await ExchangeRateService.instance.quote(
+            from: _currency!,
+            to: _baseCurrency,
+            date: _selectedDate,
+          );
+          if (!mounted) return;
+          setState(() => _saving = false);
+        }
+      }
+
+      if (quote == null) {
+        setState(() => _quoteFailed = true);
+        return;
+      }
+
+      transactionData = transactionData.withForeignAmount(
+        foreignAmount: entered,
+        currency: _currency!,
+        rate: quote.rate,
+        estimated: quote.estimated,
       );
-      widget.onSave(transactionData);
-      Navigator.pop(context);
+      if (transactionData.amount > 999999999) {
+        setState(() => _quoteFailed = true);
+        return;
+      }
     }
+
+    widget.onSave(transactionData);
+    if (mounted) Navigator.pop(context);
+  }
+
+  Widget _buildCurrencyChip() {
+    final color = _typeColor;
+    return Padding(
+      padding: const EdgeInsets.only(right: 8),
+      child: InkWell(
+        onTap: _pickCurrency,
+        borderRadius: BorderRadius.circular(8),
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(10, 6, 4, 6),
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: _isForeign ? 0.18 : 0.08),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                _currency ?? _baseCurrency,
+                style: TextStyle(
+                  color: color,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 13,
+                ),
+              ),
+              Icon(Icons.arrow_drop_down, color: color, size: 18),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// "≈ €89.90 · 1 EUR = 61.40 MKD" under the amount when paying in another
+  /// currency.
+  Widget _buildConversionPreview(BuildContext context) {
+    final settings = AppSettingsScope.of(context);
+    final TextStyle muted = TextStyle(fontSize: 12, color: context.cMutedText);
+
+    if (_quoteLoading) {
+      return Row(
+        children: [
+          const SizedBox(
+            width: 12,
+            height: 12,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          ),
+          const SizedBox(width: 8),
+          Text('Getting the $_currency rate…', style: muted),
+        ],
+      );
+    }
+
+    if (_quoteFailed || _quote == null) {
+      return Text(
+        "Couldn't get the $_currency exchange rate. Check your connection.",
+        style: const TextStyle(fontSize: 12, color: AppColors.expense),
+      );
+    }
+
+    final q = _quote!;
+    final rateText = formatRate(q.rate, base: _baseCurrency, foreign: _currency!);
+    final entered = _enteredAmount;
+    final converted = (entered != null && entered > 0)
+        ? '≈ ${settings.formatAmountFull(roundMoney(entered / q.rate))}  ·  '
+        : '';
+
+    return Text.rich(
+      TextSpan(
+        children: [
+          TextSpan(
+            text: converted,
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: _typeColor,
+            ),
+          ),
+          TextSpan(text: rateText, style: muted),
+          if (q.estimated)
+            TextSpan(text: '  (offline estimate)', style: muted),
+        ],
+      ),
+    );
   }
 
   @override
@@ -417,31 +631,45 @@ class _TransactionFormState extends State<TransactionForm> {
                   keyboardType: const TextInputType.numberWithOptions(
                     decimal: true,
                   ),
-                  decoration: const InputDecoration(
+                  onChanged: (_) {
+                    if (_isForeign) setState(() {}); // refresh "≈ €…"
+                  },
+                  decoration: InputDecoration(
                     labelText: 'Amount',
                     hintText: 'Enter amount',
-                    prefixIcon: Icon(
+                    prefixIcon: const Icon(
                       Icons.attach_money,
                       color: AppColors.darkCyan,
+                    ),
+                    suffixIcon: _buildCurrencyChip(),
+                    suffixIconConstraints: const BoxConstraints(
+                      minWidth: 0,
+                      minHeight: 0,
                     ),
                   ),
                   validator: (value) {
                     if (value == null || value.isEmpty) {
                       return 'Please enter an amount';
                     }
-                    final parsed = double.tryParse(value);
+                    final parsed = double.tryParse(value.trim());
                     if (parsed == null) {
                       return 'Please enter a valid number';
                     }
                     if (parsed <= 0) {
                       return 'Amount must be greater than zero';
                     }
-                    if (parsed > 999999999) {
+                    // Foreign amounts are checked after conversion.
+                    if (parsed > (_isForeign ? 1e12 : 999999999)) {
                       return 'Amount is too large';
                     }
                     return null;
                   },
                 ),
+                if (_isForeign)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(12, 6, 12, 0),
+                    child: _buildConversionPreview(context),
+                  ),
                 const SizedBox(height: 12),
 
                 // Date picker
@@ -519,7 +747,7 @@ class _TransactionFormState extends State<TransactionForm> {
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton(
-                    onPressed: _submitForm,
+                    onPressed: _saving ? null : _submitForm,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: _typeColor,
                       foregroundColor: Colors.white,

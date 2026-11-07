@@ -1,47 +1,19 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:expenses_tracker/models/balance_reset.dart';
+import 'package:expenses_tracker/models/currency.dart';
 import 'package:expenses_tracker/providers/app_settings.dart';
 import 'package:expenses_tracker/services/balance_calculator.dart';
 import 'package:expenses_tracker/services/biometric_service.dart';
+import 'package:expenses_tracker/services/exchange_rate_service.dart';
 import 'package:expenses_tracker/services/firebase_service.dart';
+import 'package:expenses_tracker/widgets/currency_picker.dart';
 import 'package:expenses_tracker/services/wallet_notification_service.dart';
 import 'package:expenses_tracker/theme/app_colors.dart';
 import 'package:expenses_tracker/theme/theme_extensions.dart';
-
-// ─── Currency catalogue ────────────────────────────────────────────────────────
-
-class _Currency {
-  final String code;
-  final String symbol;
-  final String name;
-  const _Currency(this.code, this.symbol, this.name);
-}
-
-const _kCurrencies = [
-  _Currency('EUR', '€',    'Euro'),
-  _Currency('USD', '\$',   'US Dollar'),
-  _Currency('GBP', '£',    'British Pound'),
-  _Currency('CHF', 'Fr',   'Swiss Franc'),
-  _Currency('JPY', '¥',    'Japanese Yen'),
-  _Currency('CNY', '¥',    'Chinese Yuan'),
-  _Currency('CAD', 'CA\$', 'Canadian Dollar'),
-  _Currency('AUD', 'A\$',  'Australian Dollar'),
-  _Currency('INR', '₹',    'Indian Rupee'),
-  _Currency('BRL', 'R\$',  'Brazilian Real'),
-  _Currency('RUB', '₽',    'Russian Ruble'),
-  _Currency('SEK', 'kr',   'Swedish Krona'),
-  _Currency('NOK', 'kr',   'Norwegian Krone'),
-  _Currency('DKK', 'kr',   'Danish Krone'),
-  _Currency('PLN', 'zł',   'Polish Złoty'),
-  _Currency('RON', 'lei',  'Romanian Leu'),
-  _Currency('BGN', 'лв',   'Bulgarian Lev'),
-  _Currency('HUF', 'Ft',   'Hungarian Forint'),
-  _Currency('CZK', 'Kč',   'Czech Koruna'),
-  _Currency('TRY', '₺',    'Turkish Lira'),
-];
 
 // ─── Date-format catalogue ─────────────────────────────────────────────────────
 
@@ -109,13 +81,6 @@ class SettingsScreen extends StatelessWidget {
                 trailingText: _themeLabel(settings.themeMode),
                 onTap: () => _showThemePicker(context, settings),
               ),
-              // Currency
-              _SettingsRow(
-                icon: Icons.currency_exchange,
-                title: 'Currency',
-                trailingText: '${settings.currencySymbol}  ${settings.currency}',
-                onTap: () => _showCurrencyPicker(context, settings),
-              ),
             ],
           ),
 
@@ -126,6 +91,13 @@ class SettingsScreen extends StatelessWidget {
           const SizedBox(height: 8),
           _SettingsCard(
             children: [
+              // Default currency — every amount is stored in this currency
+              _SettingsRow(
+                icon: Icons.currency_exchange,
+                title: 'Default currency',
+                trailingText: '${settings.currencySymbol}  ${settings.currency}',
+                onTap: () => _changeDefaultCurrency(context, settings),
+              ),
               // Date format
               _SettingsRow(
                 icon: Icons.calendar_today_outlined,
@@ -307,19 +279,105 @@ class SettingsScreen extends StatelessWidget {
     );
   }
 
-  void _showCurrencyPicker(BuildContext context, AppSettings settings) {
-    showModalBottomSheet(
+  /// Pick a new default currency, then convert every stored amount to it at
+  /// today's rate so the balance keeps meaning the same thing.
+  Future<void> _changeDefaultCurrency(
+    BuildContext context,
+    AppSettings settings,
+  ) async {
+    final oldCode = settings.currency;
+    final newCode = await showCurrencyPicker(
+      context,
+      current: oldCode,
+      title: 'Default Currency',
+    );
+    if (newCode == null || newCode == oldCode || !context.mounted) return;
+
+    final messenger = ScaffoldMessenger.of(context);
+
+    // Units of the new currency per 1 unit of the old one — must be live.
+    final quote = await ExchangeRateService.instance.quote(
+      from: newCode,
+      to: oldCode,
+      allowCached: false,
+    );
+    if (!context.mounted) return;
+    if (quote == null) {
+      messenger.showSnackBar(const SnackBar(
+        content: Text(
+          "Couldn't get today's exchange rate. Check your connection and try again.",
+        ),
+        backgroundColor: AppColors.expense,
+      ));
+      return;
+    }
+
+    final confirmed = await showDialog<bool>(
       context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (sheetCtx) => _CurrencyPicker(
-        current: settings.currency,
-        onSelected: (code) {
-          settings.setCurrency(code);
-          Navigator.pop(sheetCtx);
-        },
+      builder: (ctx) => AlertDialog(
+        title: Text('Switch to $newCode?'),
+        content: Text(
+          'All your expenses, incomes, savings and resets will be converted '
+          'from $oldCode to $newCode at today\'s rate:\n\n'
+          '${formatRate(quote.rate, base: oldCode, foreign: newCode)}\n\n'
+          'Shared tracker amounts are not converted.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Convert'),
+          ),
+        ],
       ),
     );
+    if (confirmed != true || !context.mounted) return;
+
+    // Blocking progress dialog while the batches run.
+    final navigator = Navigator.of(context);
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => PopScope(
+        canPop: false,
+        child: AlertDialog(
+          content: Row(
+            children: [
+              const SizedBox(
+                width: 24,
+                height: 24,
+                child: CircularProgressIndicator(strokeWidth: 3),
+              ),
+              const SizedBox(width: 20),
+              Expanded(child: Text('Converting to $newCode…')),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    try {
+      final count = await FirebaseService().convertAllToCurrency(
+        newBase: newCode,
+        factor: quote.rate,
+      );
+      await settings.setCurrency(newCode);
+      await FirebaseService().setBaseCurrency(newCode);
+      unawaited(ExchangeRateService.instance.prewarm(newCode));
+      navigator.pop();
+      messenger.showSnackBar(SnackBar(
+        content: Text('Converted $count transactions to $newCode'),
+      ));
+    } catch (e) {
+      navigator.pop();
+      messenger.showSnackBar(SnackBar(
+        content: Text('Conversion failed: $e'),
+        backgroundColor: AppColors.expense,
+      ));
+    }
   }
 
   void _showDateFormatPicker(BuildContext context, AppSettings settings) {
@@ -700,95 +758,6 @@ class _TabPickerSheet extends StatelessWidget {
             );
           }),
           const SizedBox(height: 16),
-        ],
-      ),
-    );
-  }
-}
-
-// ─── Currency picker bottom sheet ──────────────────────────────────────────────
-
-class _CurrencyPicker extends StatelessWidget {
-  final String current;
-  final ValueChanged<String> onSelected;
-  const _CurrencyPicker({required this.current, required this.onSelected});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: context.cCard,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      padding: EdgeInsets.only(
-        bottom: MediaQuery.of(context).viewInsets.bottom,
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          _SheetHandle(),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 4, 20, 12),
-            child: Text(
-              'Select Currency',
-              style: TextStyle(
-                fontSize: 17,
-                fontWeight: FontWeight.bold,
-                color: context.cPrimaryText,
-              ),
-            ),
-          ),
-          Divider(height: 1, color: context.cDivider),
-          ConstrainedBox(
-            constraints: BoxConstraints(
-              maxHeight: MediaQuery.of(context).size.height * 0.55,
-            ),
-            child: ListView.builder(
-              shrinkWrap: true,
-              itemCount: _kCurrencies.length,
-              itemBuilder: (_, i) {
-                final c = _kCurrencies[i];
-                final selected = c.code == current;
-                return ListTile(
-                  leading: Container(
-                    width: 40,
-                    height: 40,
-                    decoration: BoxDecoration(
-                      color: AppColors.primary.withValues(alpha: 0.10),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    alignment: Alignment.center,
-                    child: Text(
-                      c.symbol,
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: AppColors.primary,
-                      ),
-                    ),
-                  ),
-                  title: Text(
-                    c.name,
-                    style: TextStyle(
-                      color: context.cPrimaryText,
-                      fontWeight:
-                          selected ? FontWeight.bold : FontWeight.normal,
-                    ),
-                  ),
-                  subtitle: Text(
-                    c.code,
-                    style:
-                        TextStyle(color: context.cMutedText, fontSize: 12),
-                  ),
-                  trailing: selected
-                      ? Icon(Icons.check_circle, color: AppColors.primary)
-                      : null,
-                  onTap: () => onSelected(c.code),
-                );
-              },
-            ),
-          ),
-          const SizedBox(height: 8),
         ],
       ),
     );

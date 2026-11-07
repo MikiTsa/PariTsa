@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:expenses_tracker/models/balance_reset.dart';
+import 'package:expenses_tracker/models/currency.dart';
 import 'package:expenses_tracker/models/transaction.dart';
 import 'package:expenses_tracker/providers/app_settings.dart';
 import 'package:expenses_tracker/services/firebase_service.dart';
@@ -369,6 +370,15 @@ class _HistoryScreenState extends State<HistoryScreen> {
                   const SizedBox(height: 12),
                   _buildDetailRow(ctx, Icons.label_outline, 'Tag', t.tag!),
                 ],
+                if (t.isForeign) ...[
+                  const SizedBox(height: 12),
+                  _buildDetailRow(
+                    ctx,
+                    Icons.currency_exchange,
+                    'Paid in ${t.originalCurrency}',
+                    originalAmountDetail(t, settings.currency),
+                  ),
+                ],
               ],
             ),
           ),
@@ -573,6 +583,19 @@ class _HistoryScreenState extends State<HistoryScreen> {
                                           ),
                                         ),
                                       ],
+                                    ),
+                                  ),
+                                if (t.isForeign)
+                                  Text(
+                                    formatWithCode(
+                                          t.originalAmount!,
+                                          t.originalCurrency!,
+                                        ) +
+                                        (t.rateEstimated ? ' · est.' : ''),
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: context.cMutedText,
+                                      fontWeight: FontWeight.w500,
                                     ),
                                   ),
                               ],

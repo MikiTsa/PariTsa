@@ -17,7 +17,7 @@ service cloud.firestore {
 
     function isValidUserData() {
       let requiredFields = ['uid', 'email', 'createdAt'];
-      let allowedFields  = ['uid', 'email', 'displayName', 'createdAt'];
+      let allowedFields  = ['uid', 'email', 'displayName', 'createdAt', 'baseCurrency'];
 
       return request.resource.data.keys().hasAll(requiredFields)
           && request.resource.data.keys().hasOnly(allowedFields)
@@ -30,7 +30,8 @@ service cloud.firestore {
              );
     }
 
-    // Balance/savings reset point. Created and deleted (undo) only, never edited.
+    // Balance/savings reset point. Updated only when the default currency
+    // changes (amounts converted); undo deletes it.
     function isValidReset(resetId) {
       let data   = request.resource.data;
       let fields = ['id', 'target', 'date', 'amount', 'previousAmount'];
@@ -54,7 +55,9 @@ service cloud.firestore {
 
     function isValidTransaction() {
       let requiredFields = ['id', 'title', 'amount', 'date'];
-      let allowedFields  = ['id', 'title', 'amount', 'date', 'category', 'note', 'tag'];
+      let allowedFields  = ['id', 'title', 'amount', 'date', 'category', 'note', 'tag',
+                            'originalAmount', 'originalCurrency', 'exchangeRate', 'rateEstimated'];
+      let data = request.resource.data;
 
       return request.resource.data.keys().hasAll(requiredFields)
           && request.resource.data.keys().hasOnly(allowedFields)
@@ -77,13 +80,24 @@ service cloud.firestore {
           && (
                !request.resource.data.keys().hasAny(['tag']) ||
                request.resource.data.tag is string
-             );
+             )
+          // Foreign-currency payment: what was actually paid and the rate used.
+          && (!data.keys().hasAny(['originalAmount'])
+               || (data.originalAmount is number && data.originalAmount > 0))
+          && (!data.keys().hasAny(['originalCurrency'])
+               || (data.originalCurrency is string && data.originalCurrency.size() == 3))
+          && (!data.keys().hasAny(['exchangeRate'])
+               || (data.exchangeRate is number && data.exchangeRate > 0))
+          && (!data.keys().hasAny(['rateEstimated']) || data.rateEstimated is bool);
     }
 
     function isValidUserUpdate() {
-      let affectedKeys = request.resource.data.diff(resource.data).affectedKeys();
-      return affectedKeys.hasOnly(['displayName'])
-          && request.resource.data.displayName is string;
+      let data = request.resource.data;
+      let affectedKeys = data.diff(resource.data).affectedKeys();
+      return affectedKeys.hasOnly(['displayName', 'baseCurrency'])
+          && (!affectedKeys.hasAny(['displayName']) || data.displayName is string)
+          && (!affectedKeys.hasAny(['baseCurrency'])
+               || (data.baseCurrency is string && data.baseCurrency.size() == 3));
     }
 
     function isValidSharedTracker() {
@@ -185,8 +199,7 @@ service cloud.firestore {
       // RESETS subcollection — balance/savings reset points (non-destructive)
       match /resets/{resetId} {
         allow read, delete: if isOwner(userId);
-        allow create: if isOwner(userId) && isValidReset(resetId);
-        allow update: if false;
+        allow create, update: if isOwner(userId) && isValidReset(resetId);
       }
 
       // FCM TOKENS subcollection — device push tokens, written by the device owner only

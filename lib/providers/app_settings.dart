@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:expenses_tracker/models/currency.dart' as currency_catalogue;
 import 'package:expenses_tracker/services/settings_service.dart';
 
 // ─── Data model ───────────────────────────────────────────────────────────────
@@ -19,30 +20,7 @@ class AppSettings extends ChangeNotifier {
 
   // ── Currency symbol ────────────────────────────────────────────────────────
 
-  static const Map<String, String> _symbols = {
-    'EUR': '€',
-    'USD': '\$',
-    'GBP': '£',
-    'CHF': 'Fr',
-    'JPY': '¥',
-    'CNY': '¥',
-    'CAD': 'CA\$',
-    'AUD': 'A\$',
-    'INR': '₹',
-    'BRL': 'R\$',
-    'RUB': '₽',
-    'SEK': 'kr',
-    'NOK': 'kr',
-    'DKK': 'kr',
-    'PLN': 'zł',
-    'RON': 'lei',
-    'BGN': 'лв',
-    'HUF': 'Ft',
-    'CZK': 'Kč',
-    'TRY': '₺',
-  };
-
-  String get currencySymbol => _symbols[_currency] ?? _currency;
+  String get currencySymbol => currency_catalogue.currencySymbol(_currency);
 
   // ── Formatting helpers ─────────────────────────────────────────────────────
 

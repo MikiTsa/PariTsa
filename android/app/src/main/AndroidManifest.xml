@@ -4,6 +4,8 @@
     <!-- Required for biometric authentication -->
     <uses-permission android:name="android.permission.USE_BIOMETRIC"/>
     <uses-permission android:name="android.permission.USE_FINGERPRINT"/>
+    <!-- Exchange rates for converting foreign-currency Wallet payments -->
+    <uses-permission android:name="android.permission.INTERNET"/>
     <application
         android:label="PariTsa"
         android:name="${applicationName}"

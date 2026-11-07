@@ -158,6 +158,99 @@ class FirebaseService {
     });
   }
 
+  // ── Default currency ──────────────────────────────────────────────────────
+
+  DocumentReference? get _userDoc {
+    if (_currentUserId == null) return null;
+    return _firestore.collection(kUsersCollection).doc(_currentUserId);
+  }
+
+  /// The default currency stored on the account, or null if never set.
+  /// Throws if the account can't be read, so callers never mistake "offline"
+  /// for "not set".
+  Future<String?> getBaseCurrency() async {
+    final doc = _userDoc;
+    if (doc == null) return null;
+    final snap = await doc.get();
+    final data = snap.data() as Map<String, dynamic>?;
+    return data?['baseCurrency'] as String?;
+  }
+
+  Future<void> setBaseCurrency(String code) async {
+    final doc = _userDoc;
+    if (doc == null) return;
+    try {
+      await doc.update({'baseCurrency': code});
+    } catch (e) {
+      debugPrint('Error saving base currency: $e');
+    }
+  }
+
+  /// Writes many transactions of one type, 400 per batch.
+  Future<void> saveTransactions(
+    List<Transaction> transactions,
+    TransactionType type,
+  ) async {
+    final collection = _getCollection(type);
+    if (collection == null) throw Exception('User not authenticated');
+    for (var i = 0; i < transactions.length; i += 400) {
+      final batch = _firestore.batch();
+      for (final t in transactions.skip(i).take(400)) {
+        batch.set(collection.doc(t.id), t.toMap());
+      }
+      await batch.commit();
+    }
+  }
+
+  /// Re-expresses every personal transaction and reset in [newBase].
+  /// [factor] is units of [newBase] per 1 unit of the current default
+  /// currency. Shared tracker amounts are not touched.
+  /// Returns the number of transactions converted.
+  Future<int> convertAllToCurrency({
+    required String newBase,
+    required double factor,
+  }) async {
+    if (_currentUserId == null) throw Exception('User not authenticated');
+
+    final writes = <(DocumentReference, Map<String, dynamic>)>[];
+    var count = 0;
+
+    for (final type in TransactionType.values) {
+      final collection = _getCollection(type)!;
+      final snap = await collection.get();
+      for (final doc in snap.docs) {
+        final t = Transaction.fromFirestore(doc);
+        writes.add((doc.reference, t.rebasedTo(newBase, factor).toMap()));
+        count++;
+      }
+    }
+
+    final resets = await _resetsCollection!.get();
+    for (final doc in resets.docs) {
+      final r = BalanceReset.fromMap(doc.data() as Map<String, dynamic>);
+      if (r == null) continue;
+      writes.add((
+        doc.reference,
+        BalanceReset(
+          id: doc.id,
+          target: r.target,
+          date: r.date,
+          amount: (r.amount * factor * 100).round() / 100,
+          previousAmount: (r.previousAmount * factor * 100).round() / 100,
+        ).toMap(),
+      ));
+    }
+
+    for (var i = 0; i < writes.length; i += 400) {
+      final batch = _firestore.batch();
+      for (final (ref, data) in writes.skip(i).take(400)) {
+        batch.set(ref, data);
+      }
+      await batch.commit();
+    }
+    return count;
+  }
+
   // ── Balance / savings resets ──────────────────────────────────────────────
 
   CollectionReference? get _resetsCollection {

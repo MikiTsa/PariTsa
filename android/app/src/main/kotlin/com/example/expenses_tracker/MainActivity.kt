@@ -125,19 +125,26 @@ class MainActivity : FlutterFragmentActivity() {
             this, 0, openIntent,
             android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE,
         )
+        // Alternate between a euro payment and a real-world foreign-currency
+        // one (copied from an actual Wallet notification) to test conversion.
+        testUsesForeignSample = !testUsesForeignSample
+        val (title, text) = if (testUsesForeignSample) {
+            "WIZZ AIR HUNGARY MKD" to "MKD5,529.00 with Revolut Mastercard \u2022\u20227499"
+        } else {
+            "Google Pay" to "You paid \u20ac52.43 at Lidl \u00b7 Groceries"
+        }
         val notification = androidx.core.app.NotificationCompat.Builder(this, channelId)
             .setSmallIcon(R.mipmap.ic_launcher)
-            .setContentTitle("Google Pay")
-            .setContentText("You paid \u20ac52.43 at Lidl")
-            .setStyle(
-                androidx.core.app.NotificationCompat.BigTextStyle()
-                    .bigText("You paid \u20ac52.43 at Lidl \u00b7 Groceries")
-            )
+            .setContentTitle(title)
+            .setContentText(text)
+            .setStyle(androidx.core.app.NotificationCompat.BigTextStyle().bigText(text))
             .setContentIntent(pi)
             .setAutoCancel(true)
             .build()
         nm.notify(System.currentTimeMillis().toInt(), notification)
     }
+
+    private var testUsesForeignSample = false
 
     private fun isNotificationListenerEnabled(): Boolean {
         val flat = Settings.Secure.getString(contentResolver, "enabled_notification_listeners")
